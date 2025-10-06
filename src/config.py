@@ -25,12 +25,23 @@ class Config:
     USER_PASSWORD: str = os.getenv("USER_PASSWORD", "")
     USER_NIT: str = os.getenv("USER_NIT", "")
 
-    # MySQL Database Configuration
+    # MySQL Database Configuration (Inventory System)
     DB_HOST: str = os.getenv("DB_HOST", "localhost")
     DB_PORT: int = int(os.getenv("DB_PORT", "3306"))
     DB_NAME: str = os.getenv("DB_NAME", "")
     DB_USER: str = os.getenv("DB_USER", "")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
+
+    # SAS Database Configuration (Accounting System - Optional)
+    SAS_DB_HOST: str = os.getenv("SAS_DB_HOST", "localhost")
+    SAS_DB_PORT: int = int(os.getenv("SAS_DB_PORT", "3306"))
+    SAS_DB_NAME: str = os.getenv("SAS_DB_NAME", "")
+    SAS_DB_USER: str = os.getenv("SAS_DB_USER", "")
+    SAS_DB_PASSWORD: str = os.getenv("SAS_DB_PASSWORD", "")
+    
+    # SAS Sync Configuration
+    SAS_SYNC_BATCH_SIZE: int = int(os.getenv("SAS_SYNC_BATCH_SIZE", "100"))
+    SAS_SYNC_TIMEOUT: int = int(os.getenv("SAS_SYNC_TIMEOUT", "300"))
 
     # Optional configuration
     HEADLESS_MODE: bool = os.getenv("HEADLESS_MODE", "true").lower() == "true"
@@ -222,6 +233,20 @@ class Config:
                 f"Missing required environment variables: {', '.join(missing_vars)}\n"
                 f"Please create a .env file based on .env.example"
             )
+    
+    @classmethod
+    def is_sas_configured(cls) -> bool:
+        """Check if SAS database is configured.
+        
+        Returns:
+            True if all required SAS database variables are set, False otherwise
+        """
+        return bool(
+            cls.SAS_DB_HOST and
+            cls.SAS_DB_NAME and
+            cls.SAS_DB_USER and
+            cls.SAS_DB_PASSWORD
+        )
 
     @classmethod
     def ensure_directories(cls) -> None:

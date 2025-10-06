@@ -16,7 +16,6 @@ from .file_manager import FileManager
 from .inventory_connector import InventoryConnector
 from .sales_processor import SalesProcessor
 from .sales_validator import SalesValidator
-from .sas_syncer import SasSyncer
 from .web_scraper import WebScraper
 
 
@@ -54,17 +53,14 @@ async def main(
     month: Optional[str] = None,
     debug: bool = False,
     skip_scraping: bool = False,
-    csv_path: Optional[Path] = None,
-    sync_sas: bool = False,
-    dry_run: bool = False
+    csv_path: Optional[Path] = None
 ) -> None:
     """Main execution flow for the tax sales validator.
 
-    Orchestrates the complete workflow organized in 3-4 phases:
+    Orchestrates the complete workflow organized in 3 phases:
     1. SIAT data retrieval (web scraping + processing)
     2. Inventory data retrieval
     3. Comparison and validation
-    4. SAS sync (optional - only if --sync-sas flag is provided)
 
     Args:
         year: Year for the report (default: current year)
@@ -72,8 +68,6 @@ async def main(
         debug: Enable debug mode with detailed logging
         skip_scraping: Skip web scraping and use existing CSV file
         csv_path: Path to existing CSV file (used with skip_scraping)
-        sync_sas: Synchronize validated data to SAS accounting system
-        dry_run: Simulate SAS sync without writing to database
     """
     start_time = datetime.now()
 
@@ -219,42 +213,6 @@ async def main(
         
         print(f"\n📄 Report generated: {report_path.name}")
 
-        # Check if validation passed (no critical discrepancies)
-        # In our case, "critical" means having invoices only in SIAT or only in Inventory
-        validation_passed = (
-            validation_stats.only_siat_count == 0 and 
-            validation_stats.only_inventory_count == 0
-        )
-        
-        # =====================================================================
-        # PHASE 4: SAS SYNC (OPTIONAL)
-        # =====================================================================
-        sync_result = None
-        if sync_sas:
-            print("\n" + "=" * 80)
-            print("PHASE 4: SAS ACCOUNTING SYSTEM SYNC")
-            print("=" * 80 + "\n")
-            
-            # Check prerequisites
-            with SasSyncer(debug=debug) as syncer:
-                prereqs_met, prereq_message = syncer.check_prerequisites(validation_passed)
-                
-                if not prereqs_met:
-                    print(f"{prereq_message}")
-                    print("⚠️  Skipping SAS sync due to unmet prerequisites")
-                else:
-                    # Perform sync (real or dry run)
-                    mode = "🔍 DRY RUN" if dry_run else "💾 REAL SYNC"
-                    print(f"{mode}: Syncing validated SIAT data to SAS...")
-                    
-                    sync_result = syncer.sync_validated_data(df_siat, dry_run=dry_run)
-                    
-                    # Show summary
-                    print("\n" + syncer.get_sync_summary(sync_result))
-                    
-                    if not sync_result['success']:
-                        print("⚠️  SAS sync failed, but main validation completed successfully")
-
         # Success Summary
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -267,17 +225,6 @@ async def main(
         print(f"� SIAT: {len(df_siat):,} invoices")
         print(f"📊 Inventory: {len(df_inventory):,} invoices")
         print(f"� Report: {report_path.name}")
-        
-        # SAS sync status (if attempted)
-        if sync_result:
-            if sync_result['success']:
-                if sync_result['dry_run']:
-                    print(f"🔍 SAS Sync: Dry run successful")
-                else:
-                    print(f"💾 SAS Sync: {sync_result['inserted'] + sync_result['updated']:,} rows synced")
-            else:
-                print(f"⚠️  SAS Sync: Failed (see details above)")
-        
         if debug:
             if not skip_scraping:
                 print(f"\n📁 Files generated:")
@@ -391,18 +338,6 @@ Examples:
         help="Path to existing CSV file (used with --skip-scraping)"
     )
 
-    parser.add_argument(
-        "--sync-sas",
-        action="store_true",
-        help="Synchronize validated SIAT data to SAS accounting system (requires SAS_DB_* configuration)"
-    )
-
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Simulate SAS sync without writing to database (use with --sync-sas)"
-    )
-
     args = parser.parse_args()
 
     # Convert csv_path string to Path if provided
@@ -415,9 +350,7 @@ Examples:
             month=args.month,
             debug=args.debug,
             skip_scraping=args.skip_scraping,
-            csv_path=csv_path_obj,
-            sync_sas=args.sync_sas,
-            dry_run=args.dry_run
+            csv_path=csv_path_obj
         )
     )
 

@@ -102,6 +102,14 @@ TaxSalesValidator is a Python-based automation tool that:
 - ⏳ Historical data comparison
 - ⏳ Export to multiple formats (Excel, JSON, SQL)
 
+### Phase 7 (Completed) - SAS Accounting System Integration
+- ✅ **Atomic transaction sync** - ALL-OR-NOTHING guarantee (no partial data) ✅ COMPLETED
+- ✅ **Data transformation** - 35-field mapping from SIAT to sales_registers ✅ COMPLETED
+- ✅ **Dry run mode** - Test sync without database changes ✅ COMPLETED
+- ✅ **Prerequisites validation** - Check config and validation success ✅ COMPLETED
+- ✅ **UPSERT strategy** - Insert new records, update existing ✅ COMPLETED
+- ✅ **Optional Phase 4** - Triggered with --sync-sas flag ✅ COMPLETED
+
 ---
 
 ## 🚀 Quick Start
@@ -174,6 +182,28 @@ uv run python src/main.py --debug
 # Specify custom download directory
 uv run python src/main.py --output-dir ./custom_data
 ```
+
+### SAS Accounting System Integration (Phase 7)
+
+**Sync validated SIAT data to SAS accounting database:**
+
+```bash
+# Dry run - preview what would be synced (no database changes)
+uv run python -m src.main --skip-scraping --sync-sas --dry-run
+
+# Real sync - actually write to SAS database (atomic transaction)
+uv run python -m src.main --skip-scraping --sync-sas
+
+# Full workflow: scrape + validate + sync
+uv run python -m src.main --month SEPTIEMBRE --sync-sas
+```
+
+**Requirements for --sync-sas:**
+- SAS_DB_* variables configured in `.env`
+- Validation passed (no critical discrepancies)
+- Network access to SAS MySQL database
+
+**See detailed documentation**: [docs/PHASE7_COMPLETE.md](docs/PHASE7_COMPLETE.md)
 
 ### Expected Output
 
