@@ -89,13 +89,13 @@ TaxSalesValidator is a Python-based automation tool that:
 - ✅ **Skip scraping mode** - Process existing CSV files for testing
 - ✅ Automatic browser cleanup and error handling
 
-### Phase 2 (In Progress)
+### Phase 2 (Completed)
 - ✅ **CUF field extraction** (SUCURSAL, MODALIDAD, TIPO EMISION, etc.) ✅ COMPLETED
 - ✅ **Inventory database connection** ✅ COMPLETED
-- 🚧 **Invoice comparison logic** - Match SIAT vs Inventory by CUF
-- ⏳ Discrepancy identification and reporting
-- ⏳ Scheduled monthly execution
-- ⏳ Email notifications
+- ✅ **Invoice comparison logic** - Match SIAT vs Inventory by CUF ✅ COMPLETED
+- ✅ **Discrepancy identification and reporting** ✅ COMPLETED
+- ✅ **Excel report generation** ✅ COMPLETED
+- ✅ **Simplified output** (3 phases instead of 6) ✅ COMPLETED
 
 ### Phase 3 (Planned)
 - ⏳ Advanced analytics dashboard
@@ -179,100 +179,70 @@ uv run python src/main.py --output-dir ./custom_data
 
 ```
 ================================================================================
-🧾 TAX SALES VALIDATOR - Starting
+🧾 TAX SALES VALIDATOR
 ================================================================================
-📅 Target period: SEPTIEMBRE 2025
-🕐 Started at: 2025-10-06 10:46:36
-================================================================================
-
-================================================================================
-PHASE 1: WEB SCRAPING AND DOWNLOAD
+📅 Period: SEPTIEMBRE 2025
+🕐 Started: 2025-10-06 13:03:40
 ================================================================================
 
-🔐 Logging in to impuestos.gob.bo...
-✅ Authentication successful
-
-📂 Navigating to Consultas module...
-✅ Navigation complete
-
-⚙️  Configuring filters...
-   - Tipo Consulta: CONSULTA VENTAS
-   - Tipo Especificación: FACTURA ESTANDAR
-   - Gestión: 2025
-   - Periodo: SEPTIEMBRE
-✅ Filters configured
-
-🔍 Searching for report...
-✅ Report loaded
-
-⬇️  Downloading report...
-✅ ZIP downloaded: data/downloads/sales_report_20251006_143022.zip
-
 ================================================================================
-PHASE 2: FILE EXTRACTION
+PHASE 1: SIAT DATA RETRIEVAL
 ================================================================================
 
-📦 Extracting CSV from ZIP...
-✅ CSV extracted: data/processed/sales_20251006_143022.csv
+🌐 Downloading SIAT report...
+✅ Download complete
+📊 Processing SIAT data...
+✅ SIAT data retrieved: 675 invoices
 
 ================================================================================
-PHASE 3: DATA LOADING
+PHASE 2: INVENTORY DATA RETRIEVAL
 ================================================================================
 
-📊 Loading data into DataFrame...
-✅ DataFrame loaded: 670 rows × 24 columns
+�️  Querying inventory database...
+✅ Inventory data retrieved: 662 invoices
 
 ================================================================================
-PHASE 4: CUF INFORMATION EXTRACTION
+PHASE 3: COMPARISON AND VALIDATION
 ================================================================================
 
-📊 EXTRACTING CUF INFORMATION
-✅ Successfully processed: 670 rows
-📈 Success rate: 100.00%
-
-📋 CUF Extraction Validation:
-   - SUCURSAL: 670/670 (100.00%)
-   - MODALIDAD: 670/670 (100.00%)
-   - NUM FACTURA: 670/670 (100.00%)
-   ...
+� Comparing SIAT vs Inventory data...
 
 ================================================================================
-PHASE 5: INVENTORY DATA RETRIEVAL
+📋 VALIDATION SUMMARY
 ================================================================================
 
-📅 Querying inventory for period:
-   - Year: 2025
-   - Month: SEPTIEMBRE
-   - Date Range: 2025-09-01 to 2025-09-30
+📊 Dataset Sizes:
+   - SIAT (MODALIDAD=2): 662 invoices
+   - Inventory: 662 invoices
 
-✅ Database connection test successful
-✅ Query executed successfully
-   - Records retrieved: 662
+✅ Matches:
+   - Perfect matches: 662 (100.00%)
 
-📊 Inventory Data Summary:
-   - Total rows: 662
-   - Total columns: 34
-   - Total sales amount: Bs. 3,707,096.74
-   - Unique invoices: 662
-   - Invoices with CUF: 662
+⚠️  Discrepancies:
+   - Only in SIAT: 0
+   - Only in Inventory: 0
+   - Amount mismatches: 0
+   - Customer mismatches: 0
+   - Other field mismatches: 0
 
-================================================================================
-✅ SUCCESS - All phases completed
-================================================================================
-⏱️  Total execution time: 45.23 seconds
-📁 SIAT processed file: data/processed/processed_siat_20251006_104637.csv
-📁 Inventory file: data/processed/inventory_sales_20251006_104637.csv
-📊 SIAT data: 670 rows × 32 columns (with CUF fields)
-📊 Inventory data: 662 rows × 34 columns
-📅 Period: SEPTIEMBRE 2025 (2025-09-01 to 2025-09-30)
+🎯 Overall Status:
+   ✅ PERFECT - No discrepancies found!
 ================================================================================
 
-🎯 Ready for Phase 6: Invoice Comparison and Validation
-   Both datasets loaded and ready for comparison:
-   - df_siat: SIAT tax report data (670 rows)
-   - df_inventory: Inventory system data (662 rows)
+� Report generated: validation_report_20251006_130351.xlsx
+
+================================================================================
+✅ SUCCESS
+================================================================================
+⏱️  Execution time: 11.54 seconds
+� Period: SEPTIEMBRE 2025 (2025-09-01 to 2025-09-30)
+📊 SIAT: 675 invoices
+📊 Inventory: 662 invoices
+� Report: validation_report_20251006_130351.xlsx
 ================================================================================
 ```
+
+**Note**: Use `--debug` flag to see detailed step-by-step output with browser automation details, CUF extraction validation, and full file paths.
 
 ---
 
@@ -473,18 +443,25 @@ This project follows **SOLID principles** with clear separation of concerns:
 | `file_manager.py` | File operations (ZIP extraction, cleanup) |
 | `data_processor.py` | CSV parsing and DataFrame operations |
 | `sales_processor.py` | CUF extraction - Parse authorization codes into 8 structured fields |
-| `inventory_connector.py` | MySQL database connection and inventory queries (NEW) |
-| `main.py` | Orchestrate the entire workflow |
+| `inventory_connector.py` | MySQL database connection and inventory queries |
+| `sales_validator.py` | Invoice comparison, discrepancy detection, Excel report generation |
+| `main.py` | Orchestrate the entire 3-phase workflow |
 
 ### Processing Pipeline
 
 ```
-1. Web Scraping          → web_scraper.py
-2. File Extraction       → file_manager.py
-3. CSV Loading           → data_processor.py
-4. CUF Extraction        → sales_processor.py
-5. Inventory Query       → inventory_connector.py (NEW)
-6. Data Comparison       → (Future: validator.py)
+PHASE 1: SIAT DATA RETRIEVAL
+   1. Web Scraping       → web_scraper.py
+   2. File Extraction    → file_manager.py
+   3. CSV Loading        → data_processor.py
+   4. CUF Extraction     → sales_processor.py
+
+PHASE 2: INVENTORY DATA RETRIEVAL
+   5. Database Query     → inventory_connector.py
+
+PHASE 3: COMPARISON AND VALIDATION
+   6. Invoice Matching   → sales_validator.py
+   7. Report Generation  → sales_validator.py (Excel output)
 ```
 
 ### Design Principles
@@ -672,19 +649,24 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📅 Roadmap
 
-### Version 1.0 (Current)
+### Version 1.0 (Current - Production Ready)
 - [x] Basic web scraping functionality
 - [x] ZIP download and extraction
 - [x] CSV to DataFrame conversion
-- [x] CUF field extraction
+- [x] CUF field extraction (8 additional fields)
 - [x] MySQL inventory integration
 - [x] Dual data loading (SIAT + Inventory)
+- [x] Invoice comparison logic (match by CUF)
+- [x] Discrepancy identification and categorization
+- [x] Excel report generation (7-sheet workbook)
+- [x] Simplified 3-phase output
+- [x] Debug mode for detailed logging
 
 ### Version 1.1 (Next)
-- [ ] Invoice comparison logic (match by CUF)
-- [ ] Discrepancy identification
-- [ ] Excel report generation
+- [ ] Scheduled monthly execution (cron jobs)
+- [ ] Email notifications for discrepancies
 - [ ] Unit test coverage (>80%)
+- [ ] Historical data comparison
 
 ### Version 2.0 (Future)
 - [ ] Scheduled execution (cron jobs)

@@ -64,8 +64,6 @@ class FileManager:
 
             extracted_csv_path = output_dir / csv_filename
 
-        print(f"✅ CSV extracted: {extracted_csv_path}")
-
         return extracted_csv_path
 
     @staticmethod

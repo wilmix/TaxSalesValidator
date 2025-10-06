@@ -353,27 +353,15 @@ class SalesValidator:
         Returns:
             Tuple of (ComparisonResult, ComparisonStats)
         """
-        print("\n" + "=" * 80)
-        print("PHASE 6: INVOICE COMPARISON AND VALIDATION")
-        print("=" * 80 + "\n")
-        
         # Step 1: Filter SIAT by modality
-        print("🔍 Step 1: Filtering SIAT data...")
         df_siat_filtered = self.filter_siat_by_modality(df_siat, modality="2")
-        print(f"   - MODALIDAD = 2 (INVENTARIOS): {len(df_siat_filtered)} rows")
-        print(f"   - Excluded (MODALIDAD = 3, ALQUILERES): {len(df_siat) - len(df_siat_filtered)} rows")
         
         # Step 2: Match by CUF
-        print("\n🔗 Step 2: Matching invoices by CUF...")
         matched_siat, only_siat, only_inventory = self.match_invoices_by_cuf(
             df_siat_filtered, df_inventory
         )
-        print(f"   - Matched: {len(matched_siat)} invoices")
-        print(f"   - Only in SIAT: {len(only_siat)} invoices")
-        print(f"   - Only in Inventory: {len(only_inventory)} invoices")
         
         # Step 3: Compare fields for matched invoices
-        print("\n📊 Step 3: Comparing fields for matched invoices...")
         comparison = self.compare_fields(matched_siat, df_inventory)
         
         # Add only_siat and only_inventory to comparison result
@@ -523,7 +511,3 @@ class SalesValidator:
             # Other mismatches
             if not comparison.other_mismatches.empty:
                 comparison.other_mismatches.to_excel(writer, sheet_name="Other Mismatches", index=False)
-        
-        print(f"\n📄 Report generated: {output_path}")
-        print(f"   - Format: Excel (.xlsx)")
-        print(f"   - Sheets: 7 (Summary + 6 detail sheets)")

@@ -63,23 +63,14 @@ Multi-sheet workbook with:
 
 ---
 
-## 📊 Output Example
+## 📊 Output Example (Normal Mode)
 
 ```
 ================================================================================
-PHASE 6: INVOICE COMPARISON AND VALIDATION
+PHASE 3: COMPARISON AND VALIDATION
 ================================================================================
 
-🔍 Step 1: Filtering SIAT data...
-   - MODALIDAD = 2 (INVENTARIOS): 657 rows
-   - Excluded (MODALIDAD = 3, ALQUILERES): 13 rows
-
-🔗 Step 2: Matching invoices by CUF...
-   - Matched: 657 invoices
-   - Only in SIAT: 0 invoices
-   - Only in Inventory: 5 invoices
-
-📊 Step 3: Comparing fields for matched invoices...
+🔍 Comparing SIAT vs Inventory data...
 
 ================================================================================
 📋 VALIDATION SUMMARY
@@ -103,9 +94,26 @@ PHASE 6: INVOICE COMPARISON AND VALIDATION
    ⚠️  MINOR ISSUES - 7 discrepancies detected
 ================================================================================
 
-📄 Report generated: data/processed/validation_report_20251006_143022.xlsx
-   - Format: Excel (.xlsx)
-   - Sheets: 7 (Summary + 6 detail sheets)
+📄 Report generated: validation_report_20251006_143022.xlsx
+```
+
+### Debug Mode Output
+
+With `--debug` flag, you get detailed step-by-step information:
+
+```
+🔍 Comparing SIAT vs Inventory data...
+[SalesValidator] Filtered SIAT data by MODALIDAD = 2
+[SalesValidator]   - Original rows: 670
+[SalesValidator]   - Filtered rows: 657
+[SalesValidator]   - Excluded rows: 13 (MODALIDAD != 2)
+[SalesValidator] Starting invoice matching by CUF...
+[SalesValidator]   - Matched CUFs: 657
+[SalesValidator]   - Only in SIAT: 0
+[SalesValidator]   - Only in Inventory: 5
+[SalesValidator] Starting field comparison...
+[SalesValidator]   - Perfect matches: 655
+[SalesValidator]   - Amount mismatches: 2
 ```
 
 ---
@@ -229,31 +237,25 @@ uv run python -m src.main --skip-scraping --debug
 
 ---
 
-## 📊 Complete Workflow (6 Phases)
+## 📊 Complete Workflow (3 Main Phases)
 
 ```
-PHASE 1: Web Scraping
-   └─→ Download ZIP from impuestos.gob.bo
+PHASE 1: SIAT DATA RETRIEVAL
+   ├─→ Web Scraping: Download ZIP from impuestos.gob.bo
+   ├─→ File Extraction: Extract archivoVentas.csv from ZIP
+   ├─→ Data Loading: Load CSV into Pandas DataFrame (24 columns)
+   └─→ CUF Extraction: Extract 8 additional fields from authorization code
+       └─→ Result: 32 columns (df_siat)
 
-PHASE 2: File Extraction
-   └─→ Extract archivoVentas.csv from ZIP
-
-PHASE 3: Data Loading
-   └─→ Load CSV into Pandas DataFrame (24 columns)
-
-PHASE 4: CUF Extraction
-   └─→ Extract 8 additional fields from authorization code
-   └─→ Result: 32 columns (df_siat)
-
-PHASE 5: Inventory Retrieval
+PHASE 2: INVENTORY DATA RETRIEVAL
    └─→ Query MySQL for same period
-   └─→ Result: 34 columns (df_inventory)
+       └─→ Result: 34 columns (df_inventory)
 
-PHASE 6: Validation ⭐ NEW
-   └─→ Filter by MODALIDAD = 2
-   └─→ Match by CUF
-   └─→ Compare fields
-   └─→ Categorize discrepancies
+PHASE 3: COMPARISON AND VALIDATION
+   ├─→ Filter by MODALIDAD = 2
+   ├─→ Match by CUF
+   ├─→ Compare fields
+   ├─→ Categorize discrepancies
    └─→ Generate Excel report
 ```
 

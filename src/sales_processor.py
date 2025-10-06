@@ -67,12 +67,6 @@ class SalesProcessor:
                 f"Available columns: {list(df.columns)}"
             )
 
-        print("\n" + "=" * 80)
-        print("📊 EXTRACTING CUF INFORMATION")
-        print("=" * 80)
-        print(f"Total rows to process: {len(df)}")
-        print("=" * 80 + "\n")
-
         # Initialize new columns
         for field_name in self.CUF_FIELDS.keys():
             df[field_name] = ''
@@ -84,7 +78,7 @@ class SalesProcessor:
                 self.processed_count += 1
 
                 # Show progress every 100 rows
-                if (index + 1) % 100 == 0:
+                if self.debug and (index + 1) % 100 == 0:
                     print(f"  ✓ Processed {index + 1} rows...")
 
             except Exception as e:
@@ -95,13 +89,6 @@ class SalesProcessor:
                 )
                 if self.debug:
                     print(f"  ⚠️  {error_msg}")
-
-        # Summary
-        print("\n" + "-" * 80)
-        print(f"✅ Successfully processed: {self.processed_count} rows")
-        print(f"⚠️  Errors encountered: {self.error_count} rows")
-        print(f"📈 Success rate: {(self.processed_count / len(df) * 100):.2f}%")
-        print("-" * 80 + "\n")
 
         return df
 
@@ -248,10 +235,5 @@ class SalesProcessor:
         """
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(output_path, index=False, encoding='utf-8-sig')
-        
-        file_size = output_path.stat().st_size
-        print(f"\n💾 Processed data saved: {output_path}")
-        print(f"   File size: {file_size / 1024:.2f} KB")
-        print(f"   Rows: {len(df)}, Columns: {len(df.columns)}")
         
         return output_path

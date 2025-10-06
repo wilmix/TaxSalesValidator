@@ -73,8 +73,6 @@ class WebScraper:
 
         self._page = await self._context.new_page()
 
-        print("✅ Browser initialized")
-
     async def _cleanup_browser(self) -> None:
         """Close browser and clean up resources."""
         if self._context:
@@ -83,8 +81,6 @@ class WebScraper:
             await self._browser.close()
         if self._playwright:
             await self._playwright.stop()
-
-        print("✅ Browser closed")
 
     async def login(self) -> None:
         """Authenticate to the tax portal.
@@ -95,8 +91,6 @@ class WebScraper:
         """
         if not self._page:
             raise ValueError("Browser not initialized. Use 'async with' context manager.")
-
-        print("🔐 Logging in to impuestos.gob.bo...")
 
         # Navigate to login page
         await self._page.goto(Config.LOGIN_URL, wait_until="domcontentloaded")
@@ -119,8 +113,6 @@ class WebScraper:
             state="visible", timeout=10000
         )
 
-        print("✅ Authentication successful")
-
     async def navigate_to_consultas(self) -> None:
         """Navigate from dashboard to Consultas module.
 
@@ -130,8 +122,6 @@ class WebScraper:
         """
         if not self._page:
             raise ValueError("Browser not initialized. Use 'async with' context manager.")
-
-        print("📂 Navigating to Consultas module...")
 
         # Click on billing system heading to open menu
         await self._page.get_by_role(**Config.SELECTOR_BILLING_SYSTEM).click()
@@ -156,8 +146,6 @@ class WebScraper:
         await self._page.locator(Config.SELECTOR_TIPO_CONSULTA_LABEL).wait_for(
             state="visible", timeout=10000
         )
-
-        print("✅ Navigation complete")
 
     async def configure_filters(
         self,
@@ -185,25 +173,19 @@ class WebScraper:
         if month is None:
             month = Config.get_previous_month()
 
-        print(f"⚙️  Configuring filters...")
-        print(f"   - Tipo Consulta: {tipo_consulta}")
-        print(f"   - Tipo Especificación: {tipo_especificacion}")
-        print(f"   - Gestión: {year}")
-        print(f"   - Periodo: {month}")
+        # Configure filters
 
         # Select Periodo (Month) first
         await self._page.locator(Config.SELECTOR_PERIODO_SPAN).click()
         await asyncio.sleep(0.5)
         month_selector = {"role": "option", "name": month}
         await self._page.get_by_role(**month_selector).click()
-        print(f"   ✓ Periodo selected: {month}")
 
         # Select Gestión (Year)
         await self._page.locator(Config.SELECTOR_GESTION_LABEL).click()
         await asyncio.sleep(0.5)
         year_selector = {"role": "option", "name": str(year)}
         await self._page.get_by_role(**year_selector).click()
-        print(f"   ✓ Gestión selected: {year}")
 
         # Click search to load data for the period
         await self._page.get_by_role(**Config.SELECTOR_SEARCH_BUTTON).click()
@@ -214,7 +196,6 @@ class WebScraper:
         await asyncio.sleep(0.5)
         consulta_selector = {"role": "option", "name": tipo_consulta, "exact": True}
         await self._page.get_by_role(**consulta_selector).click()
-        print(f"   ✓ Tipo Consulta selected: {tipo_consulta}")
 
         # Note: Tipo Especificación is usually pre-selected as "FACTURA ESTANDAR"
         # But we can verify/change it if needed
@@ -227,11 +208,6 @@ class WebScraper:
             await asyncio.sleep(0.5)
             especificacion_selector = {"role": "option", "name": tipo_especificacion}
             await self._page.get_by_role(**especificacion_selector).click()
-            print(f"   ✓ Tipo Especificación selected: {tipo_especificacion}")
-        else:
-            print(f"   ✓ Tipo Especificación already set: {tipo_especificacion}")
-
-        print("✅ Filters configured")
 
     async def search_report(self) -> None:
         """Click the search button to load report data.
@@ -243,16 +219,12 @@ class WebScraper:
         if not self._page:
             raise ValueError("Browser not initialized. Use 'async with' context manager.")
 
-        print("🔍 Searching for report...")
-
         await self._page.get_by_role(**Config.SELECTOR_SEARCH_BUTTON).click()
 
         # Wait for results to load (download button appears)
         await self._page.get_by_role(**Config.SELECTOR_DOWNLOAD_BUTTON).wait_for(
             state="visible", timeout=15000
         )
-
-        print("✅ Report loaded")
 
     async def download_zip(self) -> Path:
         """Download the sales report ZIP file.
@@ -266,8 +238,6 @@ class WebScraper:
         """
         if not self._page:
             raise ValueError("Browser not initialized. Use 'async with' context manager.")
-
-        print("⬇️  Downloading report...")
 
         # Set up download event listener BEFORE clicking button
         async with self._page.expect_download(
@@ -285,8 +255,6 @@ class WebScraper:
         # Save the downloaded file
         await download.save_as(destination_path)
 
-        print(f"✅ ZIP downloaded: {destination_path}")
-
         return destination_path
 
     async def logout(self) -> None:
@@ -299,8 +267,6 @@ class WebScraper:
         if not self._page:
             raise ValueError("Browser not initialized. Use 'async with' context manager.")
 
-        print("🚪 Logging out...")
-
         # Click user menu (email link)
         user_menu = self._page.get_by_role(
             **{"role": "link", "name": Config.USER_EMAIL}
@@ -312,8 +278,6 @@ class WebScraper:
 
         # Confirm logout
         await self._page.get_by_role(**Config.SELECTOR_CONFIRM_LOGOUT).click()
-
-        print("✅ Logout successful")
 
     async def run_full_flow(
         self,

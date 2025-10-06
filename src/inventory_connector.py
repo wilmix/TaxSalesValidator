@@ -61,7 +61,6 @@ class InventoryConnector:
                     pool_recycle=3600,  # Recycle connections after 1 hour
                     echo=False,  # Set to True for SQL debugging
                 )
-                print("✅ Database engine created successfully")
             except Exception as e:
                 print(f"❌ Failed to create database engine: {e}")
                 raise
@@ -80,14 +79,9 @@ class InventoryConnector:
                 result = connection.execute(text("SELECT 1 as test"))
                 row = result.fetchone()
                 if row and row[0] == 1:
-                    print("✅ Database connection test successful")
-                    print(f"   - Host: {self.host}:{self.port}")
-                    print(f"   - Database: {self.database}")
-                    print(f"   - User: {self.user}")
                     return True
                 return False
         except Exception as e:
-            print(f"❌ Database connection test failed: {e}")
             return False
 
     def get_database_info(self) -> dict:
@@ -217,10 +211,6 @@ class InventoryConnector:
         """
 
         try:
-            print(f"\n🔍 Querying inventory database...")
-            print(f"   - Period: {start_date} to {end_date}")
-            print(f"   - Year: {year}")
-
             engine = self._get_engine()
 
             # Note: MySQL variables (@year, @ini, @end) need to be set in the session
@@ -313,13 +303,9 @@ class InventoryConnector:
             
             df = pd.read_sql(query_text, engine)
 
-            print(f"✅ Query executed successfully")
-            print(f"   - Records retrieved: {len(df):,}")
-
             return df
 
         except Exception as e:
-            print(f"❌ Failed to execute inventory query: {e}")
             raise
 
     def close(self) -> None:
@@ -327,7 +313,6 @@ class InventoryConnector:
         if self._engine is not None:
             self._engine.dispose()
             self._engine = None
-            print("✅ Database connection closed")
 
     def __enter__(self):
         """Context manager entry."""
