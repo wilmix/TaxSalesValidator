@@ -145,8 +145,12 @@ class WebScraper:
         # Click on "CONSULTAS" link
         await self._page.get_by_role(**Config.SELECTOR_CONSULTAS_LINK).click()
 
-        # Click on "Consultas" submenu
-        await self._page.get_by_role(**Config.SELECTOR_CONSULTAS_SUBMENU_LINK).click()
+        # Small delay for submenu to appear
+        await asyncio.sleep(0.5)
+
+        # Click on "Consultas" submenu - Use more specific selector
+        # The second one is the actual link to ConsultasContribuyente.xhtml
+        await self._page.locator('a.ui-link.ui-widget[href*="ConsultasContribuyente"]').click()
 
         # Wait for page to load (tipo consulta dropdown appears)
         await self._page.locator(Config.SELECTOR_TIPO_CONSULTA_LABEL).wait_for(

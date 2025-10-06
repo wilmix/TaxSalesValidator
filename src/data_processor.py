@@ -47,14 +47,24 @@ class DataProcessor:
 
         # If encoding specified, use it directly
         if encoding:
-            df = pd.read_csv(csv_path, encoding=encoding)
+            df = pd.read_csv(
+                csv_path,
+                encoding=encoding,
+                on_bad_lines='skip',  # Skip malformed lines
+                low_memory=False
+            )
             print(f"✅ CSV loaded with encoding: {encoding}")
             return df
 
         # Try multiple encodings
         for enc in Config.CSV_ENCODING_OPTIONS:
             try:
-                df = pd.read_csv(csv_path, encoding=enc)
+                df = pd.read_csv(
+                    csv_path,
+                    encoding=enc,
+                    on_bad_lines='skip',  # Skip malformed lines
+                    low_memory=False
+                )
                 print(f"✅ CSV loaded with encoding: {enc}")
                 return df
             except UnicodeDecodeError:
