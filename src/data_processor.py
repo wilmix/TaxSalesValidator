@@ -27,6 +27,7 @@ class DataProcessor:
         """Load CSV file into a pandas DataFrame.
 
         Automatically tries multiple encodings if not specified.
+        Fixes malformed CSV files with extra commas in company names.
 
         Args:
             csv_path: Path to the CSV file
@@ -47,14 +48,30 @@ class DataProcessor:
 
         # If encoding specified, use it directly
         if encoding:
-            df = pd.read_csv(
-                csv_path,
-                encoding=encoding,
-                on_bad_lines='skip',  # Skip malformed lines
-                low_memory=False
-            )
-            print(f"✅ CSV loaded with encoding: {encoding}")
-            return df
+            try:
+                # First attempt: Python engine (handles quotes properly)
+                df = pd.read_csv(
+                    csv_path,
+                    encoding=encoding,
+                    quotechar='"',
+                    escapechar='\\',
+                    engine='python'
+                )
+                print(f"✅ CSV loaded with encoding: {encoding} ({len(df)} rows)")
+                return df
+            except Exception as e:
+                print(f"⚠️  Standard loading failed: {e}")
+                # Try manual fix for malformed CSV
+                try:
+                    df = DataProcessor._load_and_fix_csv(csv_path, encoding)
+                    print(f"✅ CSV loaded after fixing ({len(df)} rows)")
+                    return df
+                except Exception as e2:
+                    print(f"❌ Failed to fix CSV: {e2}")
+                    # Final fallback: skip bad lines
+                    df = pd.read_csv(csv_path, encoding=encoding, on_bad_lines='skip', low_memory=False)
+                    print(f"⚠️  Loaded with skip mode ({len(df)} rows - some may be missing)")
+                    return df
 
         # Try multiple encodings
         for enc in Config.CSV_ENCODING_OPTIONS:
@@ -62,14 +79,24 @@ class DataProcessor:
                 df = pd.read_csv(
                     csv_path,
                     encoding=enc,
-                    on_bad_lines='skip',  # Skip malformed lines
-                    low_memory=False
+                    quotechar='"',
+                    escapechar='\\',
+                    engine='python'
                 )
-                print(f"✅ CSV loaded with encoding: {enc}")
+                print(f"✅ CSV loaded with encoding: {enc} ({len(df)} rows)")
                 return df
             except UnicodeDecodeError:
                 print(f"⚠️  Failed to load with encoding: {enc}")
                 continue
+            except Exception as e:
+                print(f"⚠️  Standard loading failed with {enc}: {e}")
+                # Try manual fix
+                try:
+                    df = DataProcessor._load_and_fix_csv(csv_path, enc)
+                    print(f"✅ CSV loaded with {enc} after fixing ({len(df)} rows)")
+                    return df
+                except:
+                    continue
 
         # If all encodings fail
         raise UnicodeDecodeError(
@@ -79,6 +106,61 @@ class DataProcessor:
             1,
             f"Could not load CSV with any of: {Config.CSV_ENCODING_OPTIONS}",
         )
+
+    @staticmethod
+    def _load_and_fix_csv(csv_path: Path, encoding: str) -> pd.DataFrame:
+        """Load and fix a malformed CSV file.
+        
+        Handles CSVs where company names contain unquoted commas.
+        
+        Args:
+            csv_path: Path to CSV file
+            encoding: Encoding to use
+            
+        Returns:
+            DataFrame with all rows properly parsed
+        """
+        print("   🔧 Fixing malformed CSV...")
+        
+        with open(csv_path, 'r', encoding=encoding) as f:
+            lines = f.readlines()
+        
+        if not lines:
+            return pd.DataFrame()
+        
+        # Parse header
+        header = lines[0].strip().split(',')
+        expected_fields = len(header)
+        
+        data_rows = []
+        fixed_count = 0
+        skipped_count = 0
+        
+        for i, line in enumerate(lines[1:], start=2):
+            fields = line.strip().split(',')
+            
+            if len(fields) == expected_fields:
+                data_rows.append(fields)
+            elif len(fields) > expected_fields:
+                # Extra commas - merge into company name field (index 6)
+                extra = len(fields) - expected_fields
+                fixed = fields[:6]  # First 6 fields
+                fixed.append(','.join(fields[6:7+extra]))  # Merge company name
+                fixed.extend(fields[7+extra:])  # Rest of fields
+                
+                if len(fixed) == expected_fields:
+                    data_rows.append(fixed)
+                    fixed_count += 1
+                else:
+                    skipped_count += 1
+            else:
+                skipped_count += 1
+        
+        print(f"      ✓ Fixed {fixed_count} rows with extra commas")
+        if skipped_count > 0:
+            print(f"      ⚠️  Skipped {skipped_count} malformed rows")
+        
+        return pd.DataFrame(data_rows, columns=header)
 
     @staticmethod
     def validate_dataframe(df: pd.DataFrame, min_rows: int = 1) -> bool:

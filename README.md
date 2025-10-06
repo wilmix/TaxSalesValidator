@@ -84,13 +84,16 @@ TaxSalesValidator is a Python-based automation tool that:
 - ✅ Robust ZIP download and extraction
 - ✅ CSV to Pandas DataFrame conversion
 - ✅ **CUF (Código Único de Facturación) extraction** - Extract 8 additional fields from authorization codes
+- ✅ **MySQL inventory integration** - Connect to local inventory database
+- ✅ **Dual data loading** - Load both SIAT and inventory data for comparison
 - ✅ **Skip scraping mode** - Process existing CSV files for testing
 - ✅ Automatic browser cleanup and error handling
 
 ### Phase 2 (In Progress)
-- 🚧 **CUF field extraction** (SUCURSAL, MODALIDAD, TIPO EMISION, etc.)
-- ⏳ Sales data validation against local inventory
-- ⏳ Discrepancy reporting (Excel/PDF)
+- ✅ **CUF field extraction** (SUCURSAL, MODALIDAD, TIPO EMISION, etc.) ✅ COMPLETED
+- ✅ **Inventory database connection** ✅ COMPLETED
+- 🚧 **Invoice comparison logic** - Match SIAT vs Inventory by CUF
+- ⏳ Discrepancy identification and reporting
 - ⏳ Scheduled monthly execution
 - ⏳ Email notifications
 
@@ -129,13 +132,21 @@ cp .env.example .env
 
 ### Configuration
 
-Edit the `.env` file with your tax portal credentials:
+Edit the `.env` file with your tax portal credentials and database connection:
 
 ```env
 # .env
+# Tax Portal Credentials
 USER_EMAIL=your.email@company.com
 USER_PASSWORD=YourSecurePassword
 USER_NIT=1234567890
+
+# MySQL Database Credentials (Inventory System)
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=your_database_name
+DB_USER=your_db_username
+DB_PASSWORD=your_db_password
 ```
 
 ⚠️ **IMPORTANT**: Never commit the `.env` file to version control!
@@ -167,6 +178,17 @@ uv run python src/main.py --output-dir ./custom_data
 ### Expected Output
 
 ```
+================================================================================
+🧾 TAX SALES VALIDATOR - Starting
+================================================================================
+📅 Target period: SEPTIEMBRE 2025
+🕐 Started at: 2025-10-06 10:46:36
+================================================================================
+
+================================================================================
+PHASE 1: WEB SCRAPING AND DOWNLOAD
+================================================================================
+
 🔐 Logging in to impuestos.gob.bo...
 ✅ Authentication successful
 
@@ -178,10 +200,6 @@ uv run python src/main.py --output-dir ./custom_data
    - Tipo Especificación: FACTURA ESTANDAR
    - Gestión: 2025
    - Periodo: SEPTIEMBRE
-   ✓ Periodo selected: SEPTIEMBRE
-   ✓ Gestión selected: 2025
-   ✓ Tipo Consulta selected: CONSULTA VENTAS
-   ✓ Tipo Especificación already set: FACTURA ESTANDAR
 ✅ Filters configured
 
 🔍 Searching for report...
@@ -190,17 +208,70 @@ uv run python src/main.py --output-dir ./custom_data
 ⬇️  Downloading report...
 ✅ ZIP downloaded: data/downloads/sales_report_20251006_143022.zip
 
+================================================================================
+PHASE 2: FILE EXTRACTION
+================================================================================
+
 📦 Extracting CSV from ZIP...
 ✅ CSV extracted: data/processed/sales_20251006_143022.csv
 
-📊 Loading data into DataFrame...
-✅ DataFrame loaded: 1,247 rows × 23 columns
+================================================================================
+PHASE 3: DATA LOADING
+================================================================================
 
-Summary:
-  - Total records: 1,247
-  - Date range: 2024-09-01 to 2024-09-30
-  - Total sales amount: Bs. 2,456,789.50
-  - Period: SEPTIEMBRE 2025
+📊 Loading data into DataFrame...
+✅ DataFrame loaded: 670 rows × 24 columns
+
+================================================================================
+PHASE 4: CUF INFORMATION EXTRACTION
+================================================================================
+
+📊 EXTRACTING CUF INFORMATION
+✅ Successfully processed: 670 rows
+📈 Success rate: 100.00%
+
+📋 CUF Extraction Validation:
+   - SUCURSAL: 670/670 (100.00%)
+   - MODALIDAD: 670/670 (100.00%)
+   - NUM FACTURA: 670/670 (100.00%)
+   ...
+
+================================================================================
+PHASE 5: INVENTORY DATA RETRIEVAL
+================================================================================
+
+📅 Querying inventory for period:
+   - Year: 2025
+   - Month: SEPTIEMBRE
+   - Date Range: 2025-09-01 to 2025-09-30
+
+✅ Database connection test successful
+✅ Query executed successfully
+   - Records retrieved: 662
+
+📊 Inventory Data Summary:
+   - Total rows: 662
+   - Total columns: 34
+   - Total sales amount: Bs. 3,707,096.74
+   - Unique invoices: 662
+   - Invoices with CUF: 662
+
+================================================================================
+✅ SUCCESS - All phases completed
+================================================================================
+⏱️  Total execution time: 45.23 seconds
+📁 SIAT processed file: data/processed/processed_siat_20251006_104637.csv
+📁 Inventory file: data/processed/inventory_sales_20251006_104637.csv
+📊 SIAT data: 670 rows × 32 columns (with CUF fields)
+📊 Inventory data: 662 rows × 34 columns
+📅 Period: SEPTIEMBRE 2025 (2025-09-01 to 2025-09-30)
+================================================================================
+
+🎯 Ready for Phase 6: Invoice Comparison and Validation
+   Both datasets loaded and ready for comparison:
+   - df_siat: SIAT tax report data (670 rows)
+   - df_inventory: Inventory system data (662 rows)
+================================================================================
 ```
 
 ---
@@ -261,6 +332,95 @@ uv run python -m src.main --skip-scraping
 
 ---
 
+## 🗄️ Inventory Integration
+
+The system automatically connects to your local MySQL inventory database to retrieve sales data for the same period as the SIAT report.
+
+### Features
+
+- ✅ **Automatic synchronization**: Uses same year/month as SIAT scraping
+- ✅ **Dual DataFrame loading**: Both SIAT and inventory data loaded simultaneously
+- ✅ **Comprehensive query**: 34 fields from 15+ joined tables
+- ✅ **Ready for comparison**: Data prepared for Phase 6 validation
+
+### Configuration
+
+Add your MySQL credentials to `.env`:
+
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=your_database_name
+DB_USER=your_db_username
+DB_PASSWORD=your_db_password
+```
+
+### Test Connection
+
+```bash
+# Test database connectivity
+uv run python test_db_connection.py
+```
+
+### Retrieved Data (34 columns)
+
+The inventory query retrieves comprehensive sales information:
+
+| Category | Fields |
+|----------|--------|
+| **Identification** | codigoSucursal, codigoPuntoVenta, numeroFactura, idFactura |
+| **Customer** | ClienteNit, ClienteFactura, emailCliente |
+| **Amounts** | total, moneda, tipoPago, metodoPago |
+| **SIAT** | cuf, codigoRecepcion, fechaEmisionSiat, leyenda |
+| **Status** | estado, pagada, anulada, pagadaF |
+| **Personnel** | vendedor, emisor |
+| **Dates** | fechaFac, fecha, fechaEmisionSiat |
+| **Other** | lote, almacen, pedido, glosa, cafc |
+
+### Output Example
+
+```
+================================================================================
+PHASE 5: INVENTORY DATA RETRIEVAL
+================================================================================
+
+📅 Querying inventory for period:
+   - Year: 2025
+   - Month: SEPTIEMBRE
+   - Date Range: 2025-09-01 to 2025-09-30
+
+✅ Query executed successfully
+   - Records retrieved: 662
+
+📊 Inventory Data Summary:
+   - Total rows: 662
+   - Total columns: 34
+   - Total sales amount: Bs. 3,707,096.74
+   - Unique invoices: 662
+   - Invoices with CUF: 662
+   - Date range: 2025-09-01 to 2025-09-30
+
+💾 Inventory data saved: data/processed/inventory_sales_20251006_104637.csv
+
+🎯 Ready for Phase 6: Invoice Comparison and Validation
+   Both datasets loaded and ready for comparison:
+   - df_siat: SIAT tax report data (670 rows)
+   - df_inventory: Inventory system data (662 rows)
+```
+
+### Generated Files
+
+After Phase 5, you'll have:
+
+1. **`processed_siat_YYYYMMDD_HHMMSS.csv`** - SIAT tax report with CUF fields (32 columns)
+2. **`inventory_sales_YYYYMMDD_HHMMSS.csv`** - Inventory sales data (34 columns)
+
+Both files ready for comparison in Phase 6.
+
+📚 **Detailed documentation**: See [`docs/INVENTORY_INTEGRATION.md`](docs/INVENTORY_INTEGRATION.md)
+
+---
+
 ## �📁 Project Structure
 
 ```
@@ -273,6 +433,7 @@ TaxSalesValidator/
 ├── pyproject.toml            # UV dependencies
 ├── uv.lock                   # Dependency lock file
 ├── analyze_cuf.py            # Quick CUF analysis script
+├── test_db_connection.py     # Database connection test script (NEW)
 │
 ├── src/
 │   ├── __init__.py
@@ -280,7 +441,8 @@ TaxSalesValidator/
 │   ├── web_scraper.py        # Playwright automation
 │   ├── file_manager.py       # ZIP/CSV file handling
 │   ├── data_processor.py     # Pandas data processing
-│   ├── sales_processor.py    # CUF extraction (NEW)
+│   ├── sales_processor.py    # CUF extraction
+│   ├── inventory_connector.py # MySQL database connector (NEW)
 │   └── main.py               # Application entry point
 │
 ├── data/
@@ -288,7 +450,9 @@ TaxSalesValidator/
 │   └── processed/            # Extracted CSV files & processed data
 │
 ├── docs/                     # Documentation
-│   └── CUF_PROCESSING.md     # CUF extraction guide (NEW)
+│   ├── CUF_PROCESSING.md     # CUF extraction guide
+│   ├── INVENTORY_INTEGRATION.md  # Database integration guide (NEW)
+│   └── INVENTORY_SETUP_COMPLETE.md  # Setup summary (NEW)
 │
 ├── logs/                     # Execution logs & error screenshots
 │
@@ -308,7 +472,8 @@ This project follows **SOLID principles** with clear separation of concerns:
 | `web_scraper.py` | Browser automation (login, navigation, filter configuration, download) |
 | `file_manager.py` | File operations (ZIP extraction, cleanup) |
 | `data_processor.py` | CSV parsing and DataFrame operations |
-| `sales_processor.py` | **CUF extraction** - Parse authorization codes into 8 structured fields |
+| `sales_processor.py` | CUF extraction - Parse authorization codes into 8 structured fields |
+| `inventory_connector.py` | MySQL database connection and inventory queries (NEW) |
 | `main.py` | Orchestrate the entire workflow |
 
 ### Processing Pipeline
@@ -317,8 +482,9 @@ This project follows **SOLID principles** with clear separation of concerns:
 1. Web Scraping          → web_scraper.py
 2. File Extraction       → file_manager.py
 3. CSV Loading           → data_processor.py
-4. CUF Extraction        → sales_processor.py (NEW)
-5. Data Validation       → (Future: validator.py)
+4. CUF Extraction        → sales_processor.py
+5. Inventory Query       → inventory_connector.py (NEW)
+6. Data Comparison       → (Future: validator.py)
 ```
 
 ### Design Principles
@@ -447,6 +613,8 @@ This will:
 - **playwright** (1.40+): Browser automation
 - **pandas** (2.1+): Data manipulation
 - **python-dotenv** (1.0+): Environment variable management
+- **pymysql** (1.1+): MySQL database driver (NEW)
+- **sqlalchemy** (2.0+): SQL toolkit and ORM (NEW)
 
 ### Development Tools
 
@@ -508,9 +676,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] Basic web scraping functionality
 - [x] ZIP download and extraction
 - [x] CSV to DataFrame conversion
+- [x] CUF field extraction
+- [x] MySQL inventory integration
+- [x] Dual data loading (SIAT + Inventory)
 
 ### Version 1.1 (Next)
-- [ ] Sales validation against inventory
+- [ ] Invoice comparison logic (match by CUF)
+- [ ] Discrepancy identification
 - [ ] Excel report generation
 - [ ] Unit test coverage (>80%)
 

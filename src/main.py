@@ -13,23 +13,30 @@ from typing import Optional
 from .config import Config
 from .data_processor import DataProcessor
 from .file_manager import FileManager
+from .inventory_connector import InventoryConnector
 from .sales_processor import SalesProcessor
 from .web_scraper import WebScraper
 
 
 def find_latest_csv() -> Optional[Path]:
-    """Find the most recently created CSV file in processed directory.
+    """Find the most recently created CSV file from SIAT scraping in processed directory.
+    
+    Excludes inventory and processed files to find only raw scraped data.
 
     Returns:
-        Path to the most recent CSV file, or None if no files found
+        Path to the most recent SIAT CSV file, or None if no files found
     """
     processed_dir = Config.PROCESSED_DIR
     
     if not processed_dir.exists():
         return None
     
-    # Find all CSV files recursively
-    csv_files = list(processed_dir.rglob("*.csv"))
+    # Find all CSV files recursively, excluding our processed files
+    csv_files = []
+    for csv_file in processed_dir.rglob("*.csv"):
+        # Exclude inventory and processed SIAT files
+        if not any(pattern in csv_file.name for pattern in ["inventory_", "processed_"]):
+            csv_files.append(csv_file)
     
     if not csv_files:
         return None
@@ -171,33 +178,97 @@ async def main(
         print("=" * 80 + "\n")
 
         processor = SalesProcessor(debug=debug)
-        df = processor.extract_cuf_information(df)
+        df_siat = processor.extract_cuf_information(df)
 
         # Display validation results
-        validation = processor.validate_extracted_data(df)
+        validation = processor.validate_extracted_data(df_siat)
         print("\n📋 CUF Extraction Validation:")
         for field, stats in validation.items():
             print(f"   - {field}: {stats['populated_rows']}/{stats['total_rows']} ({stats['fill_rate']})")
 
-        # Save processed data
-        output_filename = f"processed_sales_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        # Save processed data with SIAT suffix for clarity
+        output_filename = f"processed_siat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         output_path = Config.PROCESSED_DIR / output_filename
-        processor.save_processed_data(df, output_path)
+        processor.save_processed_data(df_siat, output_path)
+
+        # Phase 5: Inventory Data Retrieval
+        print("\n" + "=" * 80)
+        print("PHASE 5: INVENTORY DATA RETRIEVAL")
+        print("=" * 80 + "\n")
+
+        # Calculate date range from year and month
+        start_date, end_date = Config.get_date_range_from_month(year, month)
+        print(f"📅 Querying inventory for period:")
+        print(f"   - Year: {year}")
+        print(f"   - Month: {month}")
+        print(f"   - Date Range: {start_date} to {end_date}")
+
+        # Query inventory database
+        with InventoryConnector() as inventory:
+            # Test connection first
+            if not inventory.test_connection():
+                raise ConnectionError("Failed to connect to inventory database")
+
+            # Get inventory sales data
+            df_inventory = inventory.get_sales_from_inventory(
+                year=year,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+        # Display inventory summary
+        print(f"\n📊 Inventory Data Summary:")
+        print(f"   - Total rows: {len(df_inventory):,}")
+        print(f"   - Total columns: {len(df_inventory.columns)}")
+        
+        if len(df_inventory) > 0:
+            # Basic statistics
+            if "total" in df_inventory.columns:
+                total_amount = df_inventory["total"].sum()
+                print(f"   - Total sales amount: Bs. {total_amount:,.2f}")
+            
+            if "numeroFactura" in df_inventory.columns:
+                unique_invoices = df_inventory["numeroFactura"].nunique()
+                print(f"   - Unique invoices: {unique_invoices:,}")
+            
+            if "cuf" in df_inventory.columns:
+                invoices_with_cuf = df_inventory["cuf"].notna().sum()
+                print(f"   - Invoices with CUF: {invoices_with_cuf:,}")
+            
+            # Date range
+            if "fechaFac" in df_inventory.columns:
+                min_date = df_inventory["fechaFac"].min()
+                max_date = df_inventory["fechaFac"].max()
+                print(f"   - Date range: {min_date} to {max_date}")
+
+        # Save inventory data
+        inventory_filename = f"inventory_sales_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        inventory_path = Config.PROCESSED_DIR / inventory_filename
+        df_inventory.to_csv(inventory_path, index=False, encoding="utf-8")
+        print(f"\n💾 Inventory data saved: {inventory_path}")
 
         # Success Summary
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
-        print("=" * 80)
+        print("\n" + "=" * 80)
         print("✅ SUCCESS - All phases completed")
         print("=" * 80)
         print(f"⏱️  Total execution time: {duration:.2f} seconds")
         if not skip_scraping:
             print(f"📁 ZIP file: {zip_path}")
         print(f"📁 CSV file: {csv_path}")
-        print(f"📁 Processed file: {output_path}")
-        print(f"📊 Data loaded: {summary['rows']:,} rows × {len(df.columns)} columns (with CUF fields)")
-        print(f"📅 Period: {month} {year}")
+        print(f"📁 SIAT processed file: {output_path}")
+        print(f"� Inventory file: {inventory_path}")
+        print(f"📊 SIAT data: {summary['rows']:,} rows × {len(df_siat.columns)} columns (with CUF fields)")
+        print(f"� Inventory data: {len(df_inventory):,} rows × {len(df_inventory.columns)} columns")
+        print(f"�📅 Period: {month} {year} ({start_date} to {end_date})")
+        print("=" * 80 + "\n")
+        
+        print("🎯 Ready for Phase 6: Invoice Comparison and Validation")
+        print("   Both datasets loaded and ready for comparison:")
+        print(f"   - df_siat: SIAT tax report data ({len(df_siat)} rows)")
+        print(f"   - df_inventory: Inventory system data ({len(df_inventory)} rows)")
         print("=" * 80 + "\n")
 
         # Optional: Clean up old files (older than 7 days) only if we did scraping

@@ -25,6 +25,13 @@ class Config:
     USER_PASSWORD: str = os.getenv("USER_PASSWORD", "")
     USER_NIT: str = os.getenv("USER_NIT", "")
 
+    # MySQL Database Configuration
+    DB_HOST: str = os.getenv("DB_HOST", "localhost")
+    DB_PORT: int = int(os.getenv("DB_PORT", "3306"))
+    DB_NAME: str = os.getenv("DB_NAME", "")
+    DB_USER: str = os.getenv("DB_USER", "")
+    DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
+
     # Optional configuration
     HEADLESS_MODE: bool = os.getenv("HEADLESS_MODE", "true").lower() == "true"
     DOWNLOAD_TIMEOUT: int = int(os.getenv("DOWNLOAD_TIMEOUT", "60"))
@@ -152,6 +159,43 @@ class Config:
         """
         from datetime import datetime
         return datetime.now().year
+    
+    @staticmethod
+    def get_date_range_from_month(year: int, month_name: str) -> tuple[str, str]:
+        """Calculate start and end date from year and Spanish month name.
+        
+        Args:
+            year: Year for the date range (e.g., 2025)
+            month_name: Spanish month name in uppercase (e.g., "SEPTIEMBRE")
+        
+        Returns:
+            Tuple of (start_date, end_date) in format 'YYYY-MM-DD'
+            Example: (2025-09-01', '2025-09-30')
+        
+        Raises:
+            ValueError: If month_name is not valid
+        """
+        from calendar import monthrange
+        
+        # Reverse lookup: month name -> month number
+        month_number = None
+        for num, name in Config.MONTH_NAMES.items():
+            if name == month_name.upper():
+                month_number = num
+                break
+        
+        if month_number is None:
+            raise ValueError(
+                f"Invalid month name: {month_name}. "
+                f"Valid months: {', '.join(Config.MONTH_NAMES.values())}"
+            )
+        
+        # Calculate first and last day of the month
+        start_date = f"{year}-{month_number:02d}-01"
+        _, last_day = monthrange(year, month_number)
+        end_date = f"{year}-{month_number:02d}-{last_day:02d}"
+        
+        return start_date, end_date
 
     # ==================== VALIDATION ====================
     @classmethod
@@ -165,6 +209,10 @@ class Config:
             "USER_EMAIL": cls.USER_EMAIL,
             "USER_PASSWORD": cls.USER_PASSWORD,
             "USER_NIT": cls.USER_NIT,
+            "DB_HOST": cls.DB_HOST,
+            "DB_NAME": cls.DB_NAME,
+            "DB_USER": cls.DB_USER,
+            "DB_PASSWORD": cls.DB_PASSWORD,
         }
 
         missing_vars = [var for var, value in required_vars.items() if not value]
