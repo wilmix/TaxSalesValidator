@@ -13,25 +13,54 @@ from typing import Optional
 from .config import Config
 from .data_processor import DataProcessor
 from .file_manager import FileManager
+from .sales_processor import SalesProcessor
 from .web_scraper import WebScraper
+
+
+def find_latest_csv() -> Optional[Path]:
+    """Find the most recently created CSV file in processed directory.
+
+    Returns:
+        Path to the most recent CSV file, or None if no files found
+    """
+    processed_dir = Config.PROCESSED_DIR
+    
+    if not processed_dir.exists():
+        return None
+    
+    # Find all CSV files recursively
+    csv_files = list(processed_dir.rglob("*.csv"))
+    
+    if not csv_files:
+        return None
+    
+    # Sort by modification time, most recent first
+    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    
+    return csv_files[0]
 
 
 async def main(
     year: Optional[int] = None,
     month: Optional[str] = None,
-    debug: bool = False
+    debug: bool = False,
+    skip_scraping: bool = False,
+    csv_path: Optional[Path] = None
 ) -> None:
     """Main execution flow for the tax sales validator.
 
     Orchestrates the complete workflow:
-    1. Web scraping and download
+    1. Web scraping and download (or skip if csv_path provided)
     2. File extraction
     3. Data loading into DataFrame
+    4. CUF information extraction
 
     Args:
         year: Year for the report (default: current year)
         month: Month to download report for (default: previous month)
         debug: Enable debug mode with detailed logging
+        skip_scraping: Skip web scraping and use existing CSV file
+        csv_path: Path to existing CSV file (used with skip_scraping)
     """
     start_time = datetime.now()
 
@@ -51,35 +80,57 @@ async def main(
     print("=" * 80 + "\n")
 
     try:
-        # Phase 1: Web Scraping and Download
-        print("=" * 80)
-        print("PHASE 1: WEB SCRAPING AND DOWNLOAD")
-        print("=" * 80 + "\n")
+        # Handle skip_scraping mode
+        if skip_scraping:
+            if csv_path is None:
+                # Find the most recent CSV file
+                csv_path = find_latest_csv()
+                if csv_path is None:
+                    raise FileNotFoundError(
+                        "No CSV file found. Please run without --skip-scraping first "
+                        "or specify a CSV file path."
+                    )
 
-        async with WebScraper(headless=not debug) as scraper:
-            zip_path = await scraper.run_full_flow(year=year, month=month)
+            print("=" * 80)
+            print("⚡ SKIP SCRAPING MODE - Using existing CSV")
+            print("=" * 80)
+            print(f"📁 CSV file: {csv_path}")
+            print("=" * 80 + "\n")
 
-        # Verify ZIP file exists
-        if not zip_path.exists():
-            raise FileNotFoundError(f"Downloaded ZIP file not found: {zip_path}")
+            # Verify CSV file exists
+            if not FileManager.validate_csv_exists(csv_path):
+                raise FileNotFoundError(f"CSV file not found or invalid: {csv_path}")
 
-        # Display ZIP file info
-        zip_info = FileManager.get_file_info(zip_path)
-        print(f"\n📦 ZIP File Info:")
-        print(f"   - Name: {zip_info['name']}")
-        print(f"   - Size: {zip_info['size_mb']} MB")
-        print(f"   - Downloaded: {zip_info['created'].strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            # Phase 1: Web Scraping and Download
+            print("=" * 80)
+            print("PHASE 1: WEB SCRAPING AND DOWNLOAD")
+            print("=" * 80 + "\n")
 
-        # Phase 2: File Extraction
-        print("\n" + "=" * 80)
-        print("PHASE 2: FILE EXTRACTION")
-        print("=" * 80 + "\n")
+            async with WebScraper(headless=not debug) as scraper:
+                zip_path = await scraper.run_full_flow(year=year, month=month)
 
-        csv_path = FileManager.extract_zip(zip_path)
+            # Verify ZIP file exists
+            if not zip_path.exists():
+                raise FileNotFoundError(f"Downloaded ZIP file not found: {zip_path}")
 
-        # Verify CSV file exists
-        if not FileManager.validate_csv_exists(csv_path):
-            raise FileNotFoundError(f"Extracted CSV file not found or invalid: {csv_path}")
+            # Display ZIP file info
+            zip_info = FileManager.get_file_info(zip_path)
+            print(f"\n📦 ZIP File Info:")
+            print(f"   - Name: {zip_info['name']}")
+            print(f"   - Size: {zip_info['size_mb']} MB")
+            print(f"   - Downloaded: {zip_info['created'].strftime('%Y-%m-%d %H:%M:%S')}")
+
+            # Phase 2: File Extraction
+            print("\n" + "=" * 80)
+            print("PHASE 2: FILE EXTRACTION")
+            print("=" * 80 + "\n")
+
+            csv_path = FileManager.extract_zip(zip_path)
+
+            # Verify CSV file exists
+            if not FileManager.validate_csv_exists(csv_path):
+                raise FileNotFoundError(f"Extracted CSV file not found or invalid: {csv_path}")
 
         # Display CSV file info
         csv_info = FileManager.get_file_info(csv_path)
@@ -88,9 +139,9 @@ async def main(
         print(f"   - Size: {csv_info['size_mb']} MB")
         print(f"   - Rows (approx): {csv_info['size_bytes'] // 100:,}")  # Rough estimate
 
-        # Phase 3: Data Loading and Processing
+        # Phase 3: Data Loading
         print("\n" + "=" * 80)
-        print("PHASE 3: DATA LOADING AND PROCESSING")
+        print("PHASE 3: DATA LOADING")
         print("=" * 80 + "\n")
 
         df = DataProcessor.load_csv_to_dataframe(csv_path)
@@ -114,6 +165,25 @@ async def main(
         if debug:
             DataProcessor.print_dataframe_info(df, sample_rows=10)
 
+        # Phase 4: CUF Processing
+        print("\n" + "=" * 80)
+        print("PHASE 4: CUF INFORMATION EXTRACTION")
+        print("=" * 80 + "\n")
+
+        processor = SalesProcessor(debug=debug)
+        df = processor.extract_cuf_information(df)
+
+        # Display validation results
+        validation = processor.validate_extracted_data(df)
+        print("\n📋 CUF Extraction Validation:")
+        for field, stats in validation.items():
+            print(f"   - {field}: {stats['populated_rows']}/{stats['total_rows']} ({stats['fill_rate']})")
+
+        # Save processed data
+        output_filename = f"processed_sales_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        output_path = Config.PROCESSED_DIR / output_filename
+        processor.save_processed_data(df, output_path)
+
         # Success Summary
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -122,19 +192,22 @@ async def main(
         print("✅ SUCCESS - All phases completed")
         print("=" * 80)
         print(f"⏱️  Total execution time: {duration:.2f} seconds")
-        print(f"📁 ZIP file: {zip_path}")
+        if not skip_scraping:
+            print(f"📁 ZIP file: {zip_path}")
         print(f"📁 CSV file: {csv_path}")
-        print(f"📊 Data loaded: {summary['rows']:,} rows × {summary['columns']} columns")
+        print(f"📁 Processed file: {output_path}")
+        print(f"📊 Data loaded: {summary['rows']:,} rows × {len(df.columns)} columns (with CUF fields)")
         print(f"📅 Period: {month} {year}")
         print("=" * 80 + "\n")
 
-        # Optional: Clean up old files (older than 7 days)
-        print("🧹 Cleaning up old files...")
-        deleted_count = FileManager.cleanup_old_files(
-            Config.DOWNLOAD_DIR, days=7, pattern="*.zip", dry_run=False
-        )
-        if deleted_count > 0:
-            print(f"✅ Cleaned up {deleted_count} old file(s)")
+        # Optional: Clean up old files (older than 7 days) only if we did scraping
+        if not skip_scraping:
+            print("🧹 Cleaning up old files...")
+            deleted_count = FileManager.cleanup_old_files(
+                Config.DOWNLOAD_DIR, days=7, pattern="*.zip", dry_run=False
+            )
+            if deleted_count > 0:
+                print(f"✅ Cleaned up {deleted_count} old file(s)")
 
     except KeyboardInterrupt:
         print("\n\n⚠️  Process interrupted by user")
@@ -183,6 +256,12 @@ Examples:
   # Enable debug mode
   python -m src.main --debug
 
+  # Skip scraping and process existing CSV (for testing)
+  python -m src.main --skip-scraping
+
+  # Process specific CSV file
+  python -m src.main --skip-scraping --csv-path "data/processed/sales_20251006_095526/archivoVentas.csv"
+
   # Full example with all parameters
   python -m src.main --year 2024 --month DICIEMBRE --debug
         """,
@@ -206,10 +285,34 @@ Examples:
         "--debug", action="store_true", help="Enable debug mode (show browser, detailed logs)"
     )
 
+    parser.add_argument(
+        "--skip-scraping",
+        action="store_true",
+        help="Skip web scraping and use existing CSV file (for testing processing logic)"
+    )
+
+    parser.add_argument(
+        "--csv-path",
+        type=str,
+        default=None,
+        help="Path to existing CSV file (used with --skip-scraping)"
+    )
+
     args = parser.parse_args()
 
+    # Convert csv_path string to Path if provided
+    csv_path_obj = Path(args.csv_path) if args.csv_path else None
+
     # Run async main function
-    asyncio.run(main(year=args.year, month=args.month, debug=args.debug))
+    asyncio.run(
+        main(
+            year=args.year,
+            month=args.month,
+            debug=args.debug,
+            skip_scraping=args.skip_scraping,
+            csv_path=csv_path_obj
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -7,6 +7,21 @@
 uv run python -m src.main
 ```
 
+### Skip Scraping Mode (Testing)
+
+Process existing CSV files without running the web scraper - perfect for testing data processing logic:
+
+```bash
+# Process the most recent CSV automatically
+uv run python -m src.main --skip-scraping
+
+# Process a specific CSV file
+uv run python -m src.main --skip-scraping --csv-path "data/processed/sales_20251006_095526/archivoVentas.csv"
+
+# With debug mode for detailed logging
+uv run python -m src.main --skip-scraping --debug
+```
+
 ### Advanced Options
 
 ```bash
@@ -68,13 +83,21 @@ TaxSalesValidator is a Python-based automation tool that:
 - ✅ Automatic previous month calculation (default)
 - ✅ Robust ZIP download and extraction
 - ✅ CSV to Pandas DataFrame conversion
+- ✅ **CUF (Código Único de Facturación) extraction** - Extract 8 additional fields from authorization codes
+- ✅ **Skip scraping mode** - Process existing CSV files for testing
 - ✅ Automatic browser cleanup and error handling
 
-### Phase 2 (Planned)
+### Phase 2 (In Progress)
+- 🚧 **CUF field extraction** (SUCURSAL, MODALIDAD, TIPO EMISION, etc.)
 - ⏳ Sales data validation against local inventory
 - ⏳ Discrepancy reporting (Excel/PDF)
 - ⏳ Scheduled monthly execution
 - ⏳ Email notifications
+
+### Phase 3 (Planned)
+- ⏳ Advanced analytics dashboard
+- ⏳ Historical data comparison
+- ⏳ Export to multiple formats (Excel, JSON, SQL)
 
 ---
 
@@ -182,7 +205,63 @@ Summary:
 
 ---
 
-## 📁 Project Structure
+## � CUF Extraction
+
+The system automatically extracts **8 additional fields** from the authorization code (`CODIGO DE AUTORIZACIÓN`):
+
+### Extracted Fields
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `SUCURSAL` | Branch office code | `0`, `5`, `6` |
+| `MODALIDAD` | Billing modality | `2` (Computerized), `3` (Electronic) |
+| `TIPO EMISION` | Emission type | `1` (Online) |
+| `TIPO FACTURA` | Invoice type | `1` (Standard) |
+| `SECTOR` | Business sector | `1`, `2`, `35` |
+| `NUM FACTURA` | Invoice number | `9587`, `6923` |
+| `PV` | Point of sale | `0` |
+| `CODIGO AUTOVERIFICADOR` | Verification digit | `1`, `8`, `7` |
+
+### How It Works
+
+```python
+# Example authorization code (CUF)
+codigo = "447D97004336A8D7C85C2495A6D872EA2398A919E1187C56A11D12F74"
+
+# Extraction process:
+# 1. Take first 42 hex chars → Convert to decimal
+# 2. Convert decimal to string
+# 3. Extract from position 27 onwards
+# 4. Parse fixed positions for each field
+```
+
+### Real Data Insights
+
+From 670 invoices (September 2025):
+- **3 branch offices**: Branch 0 (47%), Branch 5 (29%), Branch 6 (24%)
+- **98% computerized**, 2% electronic billing
+- **100% online emission**, all standard invoices
+- **670 unique invoice numbers** (perfect tracking)
+
+### Usage
+
+```bash
+# CUF extraction happens automatically in Phase 4
+uv run python -m src.main --skip-scraping
+
+# Output includes validation:
+# 📋 CUF Extraction Validation:
+#    - SUCURSAL: 670/670 (100.00%)
+#    - MODALIDAD: 670/670 (100.00%)
+#    - NUM FACTURA: 670/670 (100.00%)
+#    ...
+```
+
+📚 **Detailed documentation**: See [`docs/CUF_PROCESSING.md`](docs/CUF_PROCESSING.md)
+
+---
+
+## �📁 Project Structure
 
 ```
 TaxSalesValidator/
@@ -193,6 +272,7 @@ TaxSalesValidator/
 ├── PLAN.md                   # Detailed development plan
 ├── pyproject.toml            # UV dependencies
 ├── uv.lock                   # Dependency lock file
+├── analyze_cuf.py            # Quick CUF analysis script
 │
 ├── src/
 │   ├── __init__.py
@@ -200,11 +280,15 @@ TaxSalesValidator/
 │   ├── web_scraper.py        # Playwright automation
 │   ├── file_manager.py       # ZIP/CSV file handling
 │   ├── data_processor.py     # Pandas data processing
+│   ├── sales_processor.py    # CUF extraction (NEW)
 │   └── main.py               # Application entry point
 │
 ├── data/
 │   ├── downloads/            # Downloaded ZIP files
-│   └── processed/            # Extracted CSV files
+│   └── processed/            # Extracted CSV files & processed data
+│
+├── docs/                     # Documentation
+│   └── CUF_PROCESSING.md     # CUF extraction guide (NEW)
 │
 ├── logs/                     # Execution logs & error screenshots
 │
@@ -224,7 +308,18 @@ This project follows **SOLID principles** with clear separation of concerns:
 | `web_scraper.py` | Browser automation (login, navigation, filter configuration, download) |
 | `file_manager.py` | File operations (ZIP extraction, cleanup) |
 | `data_processor.py` | CSV parsing and DataFrame operations |
+| `sales_processor.py` | **CUF extraction** - Parse authorization codes into 8 structured fields |
 | `main.py` | Orchestrate the entire workflow |
+
+### Processing Pipeline
+
+```
+1. Web Scraping          → web_scraper.py
+2. File Extraction       → file_manager.py
+3. CSV Loading           → data_processor.py
+4. CUF Extraction        → sales_processor.py (NEW)
+5. Data Validation       → (Future: validator.py)
+```
 
 ### Design Principles
 
