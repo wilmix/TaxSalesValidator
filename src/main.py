@@ -15,6 +15,7 @@ from .data_processor import DataProcessor
 from .file_manager import FileManager
 from .inventory_connector import InventoryConnector
 from .sales_processor import SalesProcessor
+from .sales_validator import SalesValidator
 from .web_scraper import WebScraper
 
 
@@ -246,6 +247,15 @@ async def main(
         inventory_path = Config.PROCESSED_DIR / inventory_filename
         df_inventory.to_csv(inventory_path, index=False, encoding="utf-8")
         print(f"\n💾 Inventory data saved: {inventory_path}")
+
+        # Phase 6: Invoice Comparison and Validation
+        validator = SalesValidator(debug=debug)
+        comparison, validation_stats = validator.validate(df_siat, df_inventory)
+        
+        # Generate Excel report
+        report_filename = f"validation_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        report_path = Config.PROCESSED_DIR / report_filename
+        validator.generate_report(comparison, validation_stats, report_path)
 
         # Success Summary
         end_time = datetime.now()
