@@ -48,14 +48,17 @@ USER_NIT=1234567890
 ### 4. Run the Scraper
 
 ```bash
-# Download September report (default)
+# Download previous month report for current year (default)
 uv run python -m src.main
 
-# Download specific month
-uv run python -m src.main --month OCTUBRE
+# Download specific month and year
+uv run python -m src.main --year 2024 --month OCTUBRE
 
 # Enable debug mode (shows browser)
 uv run python -m src.main --debug
+
+# Full example
+uv run python -m src.main --year 2025 --month SEPTIEMBRE --debug
 ```
 
 ---
@@ -89,8 +92,9 @@ uv run playwright install chromium --force
 
 1. **Test Run**: Execute `uv run python -m src.main --debug` to see the browser in action
 2. **Review Output**: Check `data/downloads/` for ZIP files and `data/processed/` for CSV files
-3. **Customize**: Edit `src/config.py` to change months or timeouts
-4. **Automate**: Schedule with cron (Linux/macOS) or Task Scheduler (Windows)
+3. **Verify Filters**: Ensure Tipo Consulta = "CONSULTA VENTAS", Tipo Especificación = "FACTURA ESTANDAR"
+4. **Customize**: Edit `src/config.py` to change default year or months
+5. **Automate**: Schedule with cron (Linux/macOS) or Task Scheduler (Windows)
 
 ---
 
@@ -99,7 +103,7 @@ uv run playwright install chromium --force
 ```
 TaxSalesValidator/
 ├── src/
-│   ├── config.py          # ⚙️ Configuration (URLs, selectors, credentials)
+│   ├── config.py          # ⚙️ Configuration (URLs, selectors, dynamic defaults)
 │   ├── web_scraper.py     # 🌐 Browser automation (Playwright)
 │   ├── file_manager.py    # 📁 File operations (ZIP extraction)
 │   ├── data_processor.py  # 📊 Data processing (Pandas)
@@ -115,10 +119,13 @@ TaxSalesValidator/
 ## Common Commands
 
 ```bash
-# Run with specific month
-uv run python -m src.main --month ENERO
-uv run python -m src.main --month FEBRERO
-uv run python -m src.main --month MARZO
+# Run with default (previous month, current year)
+uv run python -m src.main
+
+# Run with specific year and month
+uv run python -m src.main --year 2024 --month ENERO
+uv run python -m src.main --year 2024 --month FEBRERO
+uv run python -m src.main --year 2025 --month DICIEMBRE
 # ... etc
 
 # Check project structure

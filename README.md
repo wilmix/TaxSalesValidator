@@ -1,6 +1,37 @@
 # 🧾 TaxSalesValidator
 
-> **Automated web scraper for downloading and processing sales reports from the Bolivian Tax Authority (impuestos.gob.bo)**
+> **Automated web scraper for downloading and processing sales rep### Basic Execution
+
+```bash
+# Run the scraper (downloads previous month for current year by default)
+uv run python -m src.main
+```
+
+### Advanced Options
+
+```bash
+# Download a specific year and month
+uv run python -m src.main --year 2024 --month OCTUBRE
+
+# Download December 2024
+uv run python -m src.main --year 2024 --month DICIEMBRE
+
+# Use default (previous month, current year)
+uv run python -m src.main
+
+# Enable verbose logging
+uv run python -m src.main --debug
+
+# Specific period with debug mode
+uv run python -m src.main --year 2025 --month SEPTIEMBRE --debug
+```
+
+### Available Months
+
+```
+ENERO, FEBRERO, MARZO, ABRIL, MAYO, JUNIO,
+JULIO, AGOSTO, SEPTIEMBRE, OCTUBRE, NOVIEMBRE, DICIEMBRE
+```ian Tax Authority (impuestos.gob.bo)**
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Playwright](https://img.shields.io/badge/playwright-async-green.svg)](https://playwright.dev/python/)
@@ -12,10 +43,11 @@
 
 TaxSalesValidator is a Python-based automation tool that:
 1. **Authenticates** to the Bolivian Tax Authority portal (SIAT)
-2. **Navigates** to the Sales Registry module ("Registro de Ventas")
-3. **Downloads** monthly sales reports in CSV format (packaged in ZIP)
-4. **Processes** the data using Pandas for validation and analysis
-5. **Validates** sales records against local inventory systems (future feature)
+2. **Navigates** to the Consultas module ("Consultas de Compras y Ventas")
+3. **Configures filters**: Tipo Consulta (CONSULTA VENTAS), Tipo Especificación (FACTURA ESTANDAR), Year, and Month
+4. **Downloads** monthly sales reports in CSV format (packaged in ZIP)
+5. **Processes** the data using Pandas for validation and analysis
+6. **Validates** sales records against local inventory systems (future feature)
 
 ### Why This Project?
 
@@ -31,9 +63,11 @@ TaxSalesValidator is a Python-based automation tool that:
 ### Phase 1 (Current - MVP)
 - ✅ Async web scraping with Playwright
 - ✅ Secure credential management via `.env`
+- ✅ Navigate to Consultas module
+- ✅ Configurable filters (Year, Month, Query Type, Specification Type)
+- ✅ Automatic previous month calculation (default)
 - ✅ Robust ZIP download and extraction
 - ✅ CSV to Pandas DataFrame conversion
-- ✅ Configurable month selection (default: SEPTIEMBRE)
 - ✅ Automatic browser cleanup and error handling
 
 ### Phase 2 (Planned)
@@ -113,11 +147,22 @@ uv run python src/main.py --output-dir ./custom_data
 🔐 Logging in to impuestos.gob.bo...
 ✅ Authentication successful
 
-📂 Navigating to Sales Registry module...
+📂 Navigating to Consultas module...
 ✅ Navigation complete
 
-📅 Selecting period: SEPTIEMBRE...
-✅ Period selected
+⚙️  Configuring filters...
+   - Tipo Consulta: CONSULTA VENTAS
+   - Tipo Especificación: FACTURA ESTANDAR
+   - Gestión: 2025
+   - Periodo: SEPTIEMBRE
+   ✓ Periodo selected: SEPTIEMBRE
+   ✓ Gestión selected: 2025
+   ✓ Tipo Consulta selected: CONSULTA VENTAS
+   ✓ Tipo Especificación already set: FACTURA ESTANDAR
+✅ Filters configured
+
+🔍 Searching for report...
+✅ Report loaded
 
 ⬇️  Downloading report...
 ✅ ZIP downloaded: data/downloads/sales_report_20251006_143022.zip
@@ -132,6 +177,7 @@ Summary:
   - Total records: 1,247
   - Date range: 2024-09-01 to 2024-09-30
   - Total sales amount: Bs. 2,456,789.50
+  - Period: SEPTIEMBRE 2025
 ```
 
 ---
@@ -150,7 +196,7 @@ TaxSalesValidator/
 │
 ├── src/
 │   ├── __init__.py
-│   ├── config.py             # Configuration loader
+│   ├── config.py             # Configuration loader & dynamic defaults
 │   ├── web_scraper.py        # Playwright automation
 │   ├── file_manager.py       # ZIP/CSV file handling
 │   ├── data_processor.py     # Pandas data processing
@@ -160,7 +206,7 @@ TaxSalesValidator/
 │   ├── downloads/            # Downloaded ZIP files
 │   └── processed/            # Extracted CSV files
 │
-├── logs/                     # Execution logs
+├── logs/                     # Execution logs & error screenshots
 │
 └── tests/                    # Unit and integration tests
     └── __init__.py
@@ -174,8 +220,8 @@ This project follows **SOLID principles** with clear separation of concerns:
 
 | Module | Responsibility |
 |--------|---------------|
-| `config.py` | Load environment variables and store constants |
-| `web_scraper.py` | Browser automation (login, navigation, download) |
+| `config.py` | Load environment variables, store constants, calculate dynamic defaults |
+| `web_scraper.py` | Browser automation (login, navigation, filter configuration, download) |
 | `file_manager.py` | File operations (ZIP extraction, cleanup) |
 | `data_processor.py` | CSV parsing and DataFrame operations |
 | `main.py` | Orchestrate the entire workflow |
@@ -265,7 +311,13 @@ Error: TimeoutError waiting for download
 ```
 **Solution**: Check internet connection or increase timeout in `config.py`
 
-#### 3. Playwright Browser Not Found
+#### 3. Wrong Month Downloaded
+```
+Error: Expected OCTUBRE but got SEPTIEMBRE
+```
+**Solution**: Verify month name spelling (must be in Spanish UPPERCASE)
+
+#### 4. Playwright Browser Not Found
 ```
 Error: Executable doesn't exist at /path/to/chromium
 ```

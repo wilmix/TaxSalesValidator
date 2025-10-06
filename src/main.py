@@ -8,6 +8,7 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from .config import Config
 from .data_processor import DataProcessor
@@ -15,7 +16,11 @@ from .file_manager import FileManager
 from .web_scraper import WebScraper
 
 
-async def main(month: str = Config.DEFAULT_MONTH, debug: bool = False) -> None:
+async def main(
+    year: Optional[int] = None,
+    month: Optional[str] = None,
+    debug: bool = False
+) -> None:
     """Main execution flow for the tax sales validator.
 
     Orchestrates the complete workflow:
@@ -24,15 +29,24 @@ async def main(month: str = Config.DEFAULT_MONTH, debug: bool = False) -> None:
     3. Data loading into DataFrame
 
     Args:
-        month: Month to download report for (default: SEPTIEMBRE)
+        year: Year for the report (default: current year)
+        month: Month to download report for (default: previous month)
         debug: Enable debug mode with detailed logging
     """
     start_time = datetime.now()
 
+    # Use current year if not specified
+    if year is None:
+        year = Config.get_current_year()
+
+    # Use previous month if not specified
+    if month is None:
+        month = Config.get_previous_month()
+
     print("\n" + "=" * 80)
     print("🧾 TAX SALES VALIDATOR - Starting")
     print("=" * 80)
-    print(f"📅 Target month: {month}")
+    print(f"📅 Target period: {month} {year}")
     print(f"🕐 Started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80 + "\n")
 
@@ -43,7 +57,7 @@ async def main(month: str = Config.DEFAULT_MONTH, debug: bool = False) -> None:
         print("=" * 80 + "\n")
 
         async with WebScraper(headless=not debug) as scraper:
-            zip_path = await scraper.run_full_flow(month=month)
+            zip_path = await scraper.run_full_flow(year=year, month=month)
 
         # Verify ZIP file exists
         if not zip_path.exists():
@@ -104,13 +118,14 @@ async def main(month: str = Config.DEFAULT_MONTH, debug: bool = False) -> None:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
-        print("\n" + "=" * 80)
+        print("=" * 80)
         print("✅ SUCCESS - All phases completed")
         print("=" * 80)
         print(f"⏱️  Total execution time: {duration:.2f} seconds")
         print(f"📁 ZIP file: {zip_path}")
         print(f"📁 CSV file: {csv_path}")
         print(f"📊 Data loaded: {summary['rows']:,} rows × {summary['columns']} columns")
+        print(f"📅 Period: {month} {year}")
         print("=" * 80 + "\n")
 
         # Optional: Clean up old files (older than 7 days)
@@ -156,25 +171,35 @@ def run() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Download September report (default)
+  # Download previous month report for current year (default)
   python -m src.main
 
-  # Download October report
-  python -m src.main --month OCTUBRE
+  # Download specific month and year
+  python -m src.main --year 2024 --month OCTUBRE
+
+  # Download September 2025
+  python -m src.main --year 2025 --month SEPTIEMBRE
 
   # Enable debug mode
   python -m src.main --debug
 
-  # Download specific month with debug
-  python -m src.main --month NOVIEMBRE --debug
+  # Full example with all parameters
+  python -m src.main --year 2024 --month DICIEMBRE --debug
         """,
+    )
+
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=None,
+        help=f"Year for the report (default: current year {Config.get_current_year()})",
     )
 
     parser.add_argument(
         "--month",
         type=str,
-        default=Config.DEFAULT_MONTH,
-        help=f"Month to download (default: {Config.DEFAULT_MONTH})",
+        default=None,
+        help=f"Month to download in Spanish (default: previous month {Config.get_previous_month()})",
     )
 
     parser.add_argument(
@@ -184,7 +209,7 @@ Examples:
     args = parser.parse_args()
 
     # Run async main function
-    asyncio.run(main(month=args.month, debug=args.debug))
+    asyncio.run(main(year=args.year, month=args.month, debug=args.debug))
 
 
 if __name__ == "__main__":

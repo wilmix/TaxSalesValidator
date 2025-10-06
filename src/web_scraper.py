@@ -121,8 +121,8 @@ class WebScraper:
 
         print("✅ Authentication successful")
 
-    async def navigate_to_sales_report(self) -> None:
-        """Navigate from dashboard to Sales Registry module.
+    async def navigate_to_consultas(self) -> None:
+        """Navigate from dashboard to Consultas module.
 
         Raises:
             TimeoutError: If navigation elements not found
@@ -131,7 +131,7 @@ class WebScraper:
         if not self._page:
             raise ValueError("Browser not initialized. Use 'async with' context manager.")
 
-        print("📂 Navigating to Sales Registry module...")
+        print("📂 Navigating to Consultas module...")
 
         # Click on billing system heading to open menu
         await self._page.get_by_role(**Config.SELECTOR_BILLING_SYSTEM).click()
@@ -142,45 +142,92 @@ class WebScraper:
         )
         await menu_item.click()
 
-        # Click on "VENTAS" link
-        await self._page.get_by_role(**Config.SELECTOR_SALES_LINK).click()
+        # Click on "CONSULTAS" link
+        await self._page.get_by_role(**Config.SELECTOR_CONSULTAS_LINK).click()
 
-        # Click on "Registro de Ventas"
-        await self._page.get_by_role(**Config.SELECTOR_SALES_REGISTRY_LINK).click()
+        # Click on "Consultas" submenu
+        await self._page.get_by_role(**Config.SELECTOR_CONSULTAS_SUBMENU_LINK).click()
 
-        # Wait for page to load (period panel appears)
-        await self._page.locator(Config.SELECTOR_PERIOD_PANEL).first.wait_for(
+        # Wait for page to load (tipo consulta dropdown appears)
+        await self._page.locator(Config.SELECTOR_TIPO_CONSULTA_LABEL).wait_for(
             state="visible", timeout=10000
         )
 
         print("✅ Navigation complete")
 
-    async def select_month(self, month: str = Config.DEFAULT_MONTH) -> None:
-        """Select the report period (month).
+    async def configure_filters(
+        self,
+        year: int = Config.DEFAULT_YEAR,
+        month: Optional[str] = None,
+        tipo_consulta: str = Config.DEFAULT_TIPO_CONSULTA,
+        tipo_especificacion: str = Config.DEFAULT_TIPO_ESPECIFICACION,
+    ) -> None:
+        """Configure the search filters on the Consultas page.
 
         Args:
-            month: Month name in Spanish (e.g., "SEPTIEMBRE", "OCTUBRE")
+            year: Year for the report (default: current year)
+            month: Month name in Spanish (default: previous month, e.g., "SEPTIEMBRE")
+            tipo_consulta: Query type (default: "CONSULTA VENTAS")
+            tipo_especificacion: Specification type (default: "FACTURA ESTANDAR")
 
         Raises:
-            TimeoutError: If month selector not found
+            TimeoutError: If filter elements not found
             ValueError: If page is not initialized
         """
         if not self._page:
             raise ValueError("Browser not initialized. Use 'async with' context manager.")
 
-        print(f"📅 Selecting period: {month}...")
+        # Use previous month if not specified
+        if month is None:
+            month = Config.get_previous_month()
 
-        # Click on period dropdown
-        await self._page.locator(Config.SELECTOR_PERIOD_LABEL).click()
+        print(f"⚙️  Configuring filters...")
+        print(f"   - Tipo Consulta: {tipo_consulta}")
+        print(f"   - Tipo Especificación: {tipo_especificacion}")
+        print(f"   - Gestión: {year}")
+        print(f"   - Periodo: {month}")
 
-        # Small delay to ensure dropdown is open
+        # Select Periodo (Month) first
+        await self._page.locator(Config.SELECTOR_PERIODO_SPAN).click()
         await asyncio.sleep(0.5)
-
-        # Select the specified month
         month_selector = {"role": "option", "name": month}
         await self._page.get_by_role(**month_selector).click()
+        print(f"   ✓ Periodo selected: {month}")
 
-        print(f"✅ Period selected: {month}")
+        # Select Gestión (Year)
+        await self._page.locator(Config.SELECTOR_GESTION_LABEL).click()
+        await asyncio.sleep(0.5)
+        year_selector = {"role": "option", "name": str(year)}
+        await self._page.get_by_role(**year_selector).click()
+        print(f"   ✓ Gestión selected: {year}")
+
+        # Click search to load data for the period
+        await self._page.get_by_role(**Config.SELECTOR_SEARCH_BUTTON).click()
+        await asyncio.sleep(1)
+
+        # Select Tipo Consulta
+        await self._page.locator(Config.SELECTOR_TIPO_CONSULTA_LABEL).click()
+        await asyncio.sleep(0.5)
+        consulta_selector = {"role": "option", "name": tipo_consulta, "exact": True}
+        await self._page.get_by_role(**consulta_selector).click()
+        print(f"   ✓ Tipo Consulta selected: {tipo_consulta}")
+
+        # Note: Tipo Especificación is usually pre-selected as "FACTURA ESTANDAR"
+        # But we can verify/change it if needed
+        current_especificacion = await self._page.locator(
+            Config.SELECTOR_TIPO_ESPECIFICACION_LABEL
+        ).text_content()
+
+        if current_especificacion and tipo_especificacion not in current_especificacion:
+            await self._page.locator(Config.SELECTOR_TIPO_ESPECIFICACION_LABEL).click()
+            await asyncio.sleep(0.5)
+            especificacion_selector = {"role": "option", "name": tipo_especificacion}
+            await self._page.get_by_role(**especificacion_selector).click()
+            print(f"   ✓ Tipo Especificación selected: {tipo_especificacion}")
+        else:
+            print(f"   ✓ Tipo Especificación already set: {tipo_especificacion}")
+
+        print("✅ Filters configured")
 
     async def search_report(self) -> None:
         """Click the search button to load report data.
@@ -264,11 +311,20 @@ class WebScraper:
 
         print("✅ Logout successful")
 
-    async def run_full_flow(self, month: str = Config.DEFAULT_MONTH) -> Path:
+    async def run_full_flow(
+        self,
+        year: Optional[int] = None,
+        month: Optional[str] = None,
+        tipo_consulta: str = Config.DEFAULT_TIPO_CONSULTA,
+        tipo_especificacion: str = Config.DEFAULT_TIPO_ESPECIFICACION,
+    ) -> Path:
         """Execute the complete scraping flow.
 
         Args:
-            month: Month to download report for (default: SEPTIEMBRE)
+            year: Year for the report (default: current year)
+            month: Month to download report for (default: previous month)
+            tipo_consulta: Query type (default: "CONSULTA VENTAS")
+            tipo_especificacion: Specification type (default: "FACTURA ESTANDAR")
 
         Returns:
             Path to the downloaded ZIP file
@@ -277,9 +333,18 @@ class WebScraper:
             Exception: Any error during the scraping process
         """
         try:
+            # Use current year if not specified
+            if year is None:
+                year = Config.get_current_year()
+
             await self.login()
-            await self.navigate_to_sales_report()
-            await self.select_month(month)
+            await self.navigate_to_consultas()
+            await self.configure_filters(
+                year=year,
+                month=month,
+                tipo_consulta=tipo_consulta,
+                tipo_especificacion=tipo_especificacion,
+            )
             await self.search_report()
             zip_path = await self.download_zip()
             await self.logout()

@@ -57,13 +57,23 @@ class Config:
     }
     SELECTOR_PURCHASES_SALES_MENU: Final[str] = "#mat-menu-panel-6 h4"
     SELECTOR_PURCHASES_SALES_TEXT: Final[str] = "Registro de Compras y Ventas"
-    SELECTOR_SALES_LINK: Final[dict] = {"role": "link", "name": " VENTAS "}
-    SELECTOR_SALES_REGISTRY_LINK: Final[dict] = {"role": "link", "name": " Registro de Ventas"}
+    SELECTOR_CONSULTAS_LINK: Final[dict] = {"role": "link", "name": " CONSULTAS "}
+    SELECTOR_CONSULTAS_SUBMENU_LINK: Final[dict] = {"role": "link", "name": " Consultas"}
 
-    # Sales report page selectors
-    SELECTOR_PERIOD_PANEL: Final[str] = '[id="formPrincipal:pnlCriterios_content"] div'
-    SELECTOR_PERIOD_LABEL: Final[str] = '[id="formPrincipal:txtPeriodo_label"]'
-    SELECTOR_MONTH_OPTION: Final[dict] = {"role": "option", "name": "SEPTIEMBRE"}
+    # Consultas page selectors - Filter configuration
+    SELECTOR_TIPO_CONSULTA_LABEL: Final[str] = '[id="formPrincipal:txtConsulta_label"]'
+    SELECTOR_TIPO_CONSULTA_OPTION: Final[dict] = {"role": "option", "name": "CONSULTA VENTAS", "exact": True}
+    
+    SELECTOR_TIPO_ESPECIFICACION_LABEL: Final[str] = '[id="formPrincipal:ddlEspecificiacionVenta_label"]'
+    SELECTOR_TIPO_ESPECIFICACION_OPTION: Final[dict] = {"role": "option", "name": "FACTURA ESTANDAR"}
+    
+    SELECTOR_GESTION_LABEL: Final[str] = '[id="formPrincipal:txtGestion_label"]'
+    # Year will be dynamic based on parameter
+    
+    SELECTOR_PERIODO_SPAN: Final[str] = '[id="formPrincipal:txtPeriodo"] span'
+    SELECTOR_PERIODO_LABEL: Final[str] = '[id="formPrincipal:txtPeriodo_label"]'
+    # Month will be dynamic based on parameter
+    
     SELECTOR_SEARCH_BUTTON: Final[dict] = {"role": "button", "name": " Buscar"}
     SELECTOR_DOWNLOAD_BUTTON: Final[dict] = {
         "role": "button",
@@ -92,7 +102,56 @@ class Config:
 
     # ==================== DATA PROCESSING ====================
     CSV_ENCODING_OPTIONS: Final[list[str]] = ["utf-8", "latin-1", "iso-8859-1"]
-    DEFAULT_MONTH: Final[str] = "SEPTIEMBRE"
+    
+    # Default values for filters
+    DEFAULT_YEAR: int = 2025
+    DEFAULT_MONTH: Final[str] = "PREVIOUS_MONTH"  # Will calculate previous month dynamically
+    DEFAULT_TIPO_CONSULTA: Final[str] = "CONSULTA VENTAS"
+    DEFAULT_TIPO_ESPECIFICACION: Final[str] = "FACTURA ESTANDAR"
+    
+    # Spanish month names (for selector)
+    MONTH_NAMES: Final[dict[int, str]] = {
+        1: "ENERO",
+        2: "FEBRERO",
+        3: "MARZO",
+        4: "ABRIL",
+        5: "MAYO",
+        6: "JUNIO",
+        7: "JULIO",
+        8: "AGOSTO",
+        9: "SEPTIEMBRE",
+        10: "OCTUBRE",
+        11: "NOVIEMBRE",
+        12: "DICIEMBRE",
+    }
+    
+    @staticmethod
+    def get_previous_month() -> str:
+        """Get previous month name in Spanish.
+        
+        Returns:
+            Spanish name of the previous month (e.g., "SEPTIEMBRE")
+        """
+        from datetime import datetime
+        
+        current_date = datetime.now()
+        # Calculate previous month
+        if current_date.month == 1:
+            previous_month = 12
+        else:
+            previous_month = current_date.month - 1
+            
+        return Config.MONTH_NAMES[previous_month]
+    
+    @staticmethod
+    def get_current_year() -> int:
+        """Get current year.
+        
+        Returns:
+            Current year as integer
+        """
+        from datetime import datetime
+        return datetime.now().year
 
     # ==================== VALIDATION ====================
     @classmethod
