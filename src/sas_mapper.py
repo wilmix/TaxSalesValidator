@@ -205,18 +205,22 @@ class SasMapper:
                 elif sas_col == "authorization_code":
                     transformed[sas_col] = self._truncate_string(value, 64)
                 elif sas_col == "invoice_number":
-                    transformed[sas_col] = self._truncate_string(value, 15)
+                    transformed[sas_col] = self._normalize_invoice_number(value)
                 elif sas_col == "complement":
                     transformed[sas_col] = self._truncate_string(value, 5) if pd.notna(value) else None
                 elif sas_col == "control_code":
-                    transformed[sas_col] = self._truncate_string(value, 17) if pd.notna(value) else None
+                    transformed[sas_col] = self._normalize_control_code(value)
                 
                 # Handle varchar fields
                 elif sas_col in ["status", "sale_type", "consolidation_status"]:
                     transformed[sas_col] = str(value) if pd.notna(value) else ""
                 
-                # Handle small varchar fields from CUF
-                elif sas_col in ["branch_office", "modality", "emission_type", "invoice_type", "sector"]:
+                # Handle small varchar fields from CUF with normalization
+                elif sas_col == "branch_office":
+                    transformed[sas_col] = self._normalize_branch_office(value)
+                elif sas_col == "sector":
+                    transformed[sas_col] = self._normalize_sector(value)
+                elif sas_col in ["modality", "emission_type", "invoice_type"]:
                     transformed[sas_col] = self._truncate_string(value, 10) if pd.notna(value) else None
                 
                 else:
@@ -349,6 +353,102 @@ class SasMapper:
             nit = nit[:max_length]
         
         return nit
+    
+    def _normalize_invoice_number(self, value) -> str:
+        """Normalize invoice number to consistent format.
+        
+        Removes leading zeros but ensures it's a valid invoice number.
+        Examples: "0000006737" -> "6737", "9297" -> "9297"
+        
+        Args:
+            value: Raw invoice number from CUF
+            
+        Returns:
+            Normalized invoice number as string
+        """
+        if pd.isna(value) or value == "" or value is None:
+            return ""
+        
+        # Convert to string and remove leading zeros
+        str_value = str(value).strip().lstrip('0')
+        
+        # If it becomes empty (was all zeros), return original
+        if not str_value:
+            return str(value).strip()
+        
+        # Ensure it fits within 15 characters
+        if len(str_value) > 15:
+            self._log(f"  ⚠️  Invoice number too long: {str_value}")
+            self.transformation_stats["warnings"] += 1
+            return str_value[:15]
+        
+        return str_value
+    
+    def _normalize_control_code(self, value) -> str:
+        """Normalize control code.
+        
+        If empty/null in SIAT CSV, return '0'.
+        Otherwise, return the value from SIAT CSV.
+        
+        Args:
+            value: Raw control code from SIAT CSV
+            
+        Returns:
+            '0' if empty/null, otherwise the original value
+        """
+        if pd.isna(value) or value == "" or value is None:
+            return "0"
+        
+        # Return the original value if it exists
+        return str(value).strip()
+    
+    def _normalize_branch_office(self, value) -> str:
+        """Normalize branch office to consistent format.
+        
+        Removes leading zeros for consistency.
+        Examples: "0000" -> "0", "0005" -> "5"
+        
+        Args:
+            value: Raw branch office from CUF
+            
+        Returns:
+            Normalized branch office as string
+        """
+        if pd.isna(value) or value == "" or value is None:
+            return ""
+        
+        # Convert to string and remove leading zeros
+        str_value = str(value).strip().lstrip('0')
+        
+        # If it becomes empty (was all zeros), return "0"
+        if not str_value:
+            return "0"
+        
+        return str_value
+    
+    def _normalize_sector(self, value) -> str:
+        """Normalize sector to consistent format.
+        
+        Removes leading zeros for consistency.
+        Examples: "01" -> "1", "1" -> "1"
+        
+        Args:
+            value: Raw sector from CUF
+            
+        Returns:
+            Normalized sector as string
+        """
+        if pd.isna(value) or value == "" or value is None:
+            return ""
+        
+        # Convert to string and remove leading zeros
+        str_value = str(value).strip().lstrip('0')
+        
+        # If it becomes empty (was all zeros), return "0"
+        if not str_value:
+            return "0"
+        
+        return str_value
     
     def _compute_right_to_tax_credit(self, debit_tax: Decimal) -> Optional[int]:
         """Compute if invoice has right to tax credit.

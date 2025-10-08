@@ -212,12 +212,8 @@ class SasSyncer:
                 # Perform atomic UPSERT
                 upsert_result = self.connector.upsert_records(records)
                 
-                if not upsert_result['success']:
-                    raise SasSyncError(
-                        f"Database UPSERT failed: {upsert_result.get('error', 'Unknown error')}"
-                    )
-                
-                # Extract stats from upsert result
+                # upsert_records returns stats dict on success, raises exception on failure
+                # So if we reach here, it was successful
                 result['success'] = True
                 result['inserted'] = upsert_result.get('inserted', 0)
                 result['updated'] = upsert_result.get('updated', 0)
