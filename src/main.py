@@ -56,7 +56,8 @@ async def main(
     skip_scraping: bool = False,
     csv_path: Optional[Path] = None,
     sync_sas: bool = False,
-    dry_run: bool = False
+    dry_run: bool = False,
+    force_sync: bool = False
 ) -> None:
     """Main execution flow for the tax sales validator.
 
@@ -74,6 +75,7 @@ async def main(
         csv_path: Path to existing CSV file (used with skip_scraping)
         sync_sas: Synchronize validated data to SAS accounting system
         dry_run: Simulate SAS sync without writing to database
+        force_sync: Force sync even with minor validation discrepancies (use with caution)
     """
     start_time = datetime.now()
 
@@ -219,12 +221,22 @@ async def main(
         
         print(f"\n📄 Report generated: {report_path.name}")
 
-        # Check if validation passed (no critical discrepancies)
-        # In our case, "critical" means having invoices only in SIAT or only in Inventory
+        # Check if validation passed
+        # CRITICAL validation: Amount difference must be < 0.5%
+        # MINOR issues: Canceled/duplicate invoices in SIAT (only_siat) are acceptable
         validation_passed = (
-            validation_stats.only_siat_count == 0 and 
-            validation_stats.only_inventory_count == 0
+            validation_stats.amount_difference_pct <= 0.5 and  # Amounts match within tolerance
+            validation_stats.amount_mismatch_count == 0         # No individual amount mismatches
         )
+        
+        # Log validation result
+        if debug:
+            print(f"\n🔍 Validation Check:")
+            print(f"   - Amount difference: {validation_stats.amount_difference_pct:.4f}% (threshold: 0.5%)")
+            print(f"   - Amount mismatches: {validation_stats.amount_mismatch_count}")
+            print(f"   - Only in SIAT (canceled/duplicates OK): {validation_stats.only_siat_count}")
+            print(f"   - Only in Inventory: {validation_stats.only_inventory_count}")
+            print(f"   - Validation passed: {validation_passed}")
         
         # =====================================================================
         # PHASE 4: SAS SYNC (OPTIONAL)
@@ -235,12 +247,44 @@ async def main(
             print("PHASE 4: SAS ACCOUNTING SYSTEM SYNC")
             print("=" * 80 + "\n")
             
+            # Determine if we should proceed with sync
+            should_sync = validation_passed or force_sync
+            
+            # If forcing sync with discrepancies, show warning
+            if force_sync and not validation_passed:
+                print("⚠️  WARNING: --force-sync enabled")
+                print(f"   Syncing despite validation issues:")
+                if validation_stats.amount_difference_pct > 0.5:
+                    print(f"   ❌ Amount difference: {validation_stats.amount_difference_pct:.4f}% (> 0.5%)")
+                if validation_stats.amount_mismatch_count > 0:
+                    print(f"   ❌ Amount mismatches: {validation_stats.amount_mismatch_count} invoices")
+                print(f"   ℹ️  Only in SIAT: {validation_stats.only_siat_count} (canceled/duplicates - will be synced)")
+                print(f"   ℹ️  Only in Inventory: {validation_stats.only_inventory_count}")
+                
+                # Additional safety check for real sync (not dry-run)
+                if not dry_run:
+                    print("\n⚠️  CAUTION: This will write to the SAS database!")
+                    print("   Amount validation failed but --force-sync is enabled.")
+                    print("   Recommend using --dry-run first to verify data.\n")
+            elif not validation_passed and not force_sync:
+                print("ℹ️  Note: Canceled/duplicate invoices in SIAT will be included in sync")
+                print(f"   - {validation_stats.only_siat_count} invoices only in SIAT (likely canceled)")
+                if validation_stats.amount_difference_pct <= 0.5 and validation_stats.amount_mismatch_count == 0:
+                    print("   - Amounts match perfectly ✅")
+                    print("   - Proceeding with sync (canceled invoices will be included)")
+            
             # Check prerequisites
             with SasSyncer(debug=debug) as syncer:
-                prereqs_met, prereq_message = syncer.check_prerequisites(validation_passed)
+                prereqs_met, prereq_message = syncer.check_prerequisites(should_sync)
                 
                 if not prereqs_met:
                     print(f"{prereq_message}")
+                    if not validation_passed and not force_sync:
+                        print("💡 Tip: Validation failed due to amount discrepancies")
+                        print(f"   - Amount difference: {validation_stats.amount_difference_pct:.4f}%")
+                        if validation_stats.amount_mismatch_count > 0:
+                            print(f"   - Amount mismatches: {validation_stats.amount_mismatch_count} invoices")
+                        print("   Use --force-sync only if you've verified these are acceptable")
                     print("⚠️  Skipping SAS sync due to unmet prerequisites")
                 else:
                     # Perform sync (real or dry run)
@@ -403,10 +447,20 @@ Examples:
         help="Simulate SAS sync without writing to database (use with --sync-sas)"
     )
 
+    parser.add_argument(
+        "--force-sync",
+        action="store_true",
+        help="Force SAS sync even with minor validation discrepancies (use with caution, requires --sync-sas)"
+    )
+
     args = parser.parse_args()
 
     # Convert csv_path string to Path if provided
     csv_path_obj = Path(args.csv_path) if args.csv_path else None
+
+    # Validate flag combinations
+    if args.force_sync and not args.sync_sas:
+        parser.error("--force-sync requires --sync-sas flag")
 
     # Run async main function
     asyncio.run(
@@ -417,7 +471,8 @@ Examples:
             skip_scraping=args.skip_scraping,
             csv_path=csv_path_obj,
             sync_sas=args.sync_sas,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
+            force_sync=args.force_sync
         )
     )
 

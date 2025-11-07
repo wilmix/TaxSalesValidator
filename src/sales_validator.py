@@ -44,6 +44,10 @@ class ComparisonStats:
         customer_mismatch_count: Number of customer discrepancies
         other_mismatch_count: Number of other discrepancies
         match_rate: Percentage of matched invoices
+        total_siat_amount: Total amount in SIAT (Bs.)
+        total_inventory_amount: Total amount in inventory (Bs.)
+        amount_difference: Absolute difference in amounts (Bs.)
+        amount_difference_pct: Percentage difference in amounts
     """
     total_siat: int
     total_inventory: int
@@ -54,6 +58,10 @@ class ComparisonStats:
     customer_mismatch_count: int
     other_mismatch_count: int
     match_rate: float
+    total_siat_amount: float
+    total_inventory_amount: float
+    amount_difference: float
+    amount_difference_pct: float
 
 
 class SalesValidator:
@@ -372,6 +380,30 @@ class SalesValidator:
         total_matched = len(comparison.matched_invoices)
         match_rate = (total_matched / len(df_siat_filtered) * 100) if len(df_siat_filtered) > 0 else 0.0
         
+        # Calculate total amounts for validation
+        total_siat_amount = 0.0
+        total_inventory_amount = 0.0
+        
+        # Sum amounts from SIAT (MODALIDAD=2 only)
+        if "IMPORTE TOTAL DE LA VENTA" in df_siat_filtered.columns:
+            try:
+                total_siat_amount = df_siat_filtered["IMPORTE TOTAL DE LA VENTA"].astype(float).sum()
+            except (ValueError, TypeError):
+                self._log("Warning: Could not calculate SIAT total amount")
+        
+        # Sum amounts from inventory
+        if "total" in df_inventory.columns:
+            try:
+                total_inventory_amount = df_inventory["total"].astype(float).sum()
+            except (ValueError, TypeError):
+                self._log("Warning: Could not calculate inventory total amount")
+        
+        # Calculate difference
+        amount_difference = abs(total_siat_amount - total_inventory_amount)
+        amount_difference_pct = 0.0
+        if total_inventory_amount > 0:
+            amount_difference_pct = (amount_difference / total_inventory_amount) * 100
+        
         stats = ComparisonStats(
             total_siat=len(df_siat_filtered),
             total_inventory=len(df_inventory),
@@ -381,7 +413,11 @@ class SalesValidator:
             amount_mismatch_count=len(comparison.amount_mismatches),
             customer_mismatch_count=len(comparison.customer_mismatches),
             other_mismatch_count=len(comparison.other_mismatches),
-            match_rate=match_rate
+            match_rate=match_rate,
+            total_siat_amount=total_siat_amount,
+            total_inventory_amount=total_inventory_amount,
+            amount_difference=amount_difference,
+            amount_difference_pct=amount_difference_pct
         )
         
         # Display summary
@@ -403,6 +439,11 @@ class SalesValidator:
         print(f"   - SIAT (MODALIDAD=2): {stats.total_siat} invoices")
         print(f"   - Inventory: {stats.total_inventory} invoices")
         
+        print(f"\n💰 Total Amounts:")
+        print(f"   - SIAT Total: Bs. {stats.total_siat_amount:,.2f}")
+        print(f"   - Inventory Total: Bs. {stats.total_inventory_amount:,.2f}")
+        print(f"   - Difference: Bs. {stats.amount_difference:,.2f} ({stats.amount_difference_pct:.4f}%)")
+        
         print(f"\n✅ Matches:")
         print(f"   - Perfect matches: {stats.matched_count} ({stats.match_rate:.2f}%)")
         
@@ -413,7 +454,7 @@ class SalesValidator:
         print(f"   - Customer mismatches: {stats.customer_mismatch_count}")
         print(f"   - Other field mismatches: {stats.other_mismatch_count}")
         
-        # Determine status
+        # Determine status based on amounts (critical) and counts (minor)
         total_issues = (
             stats.only_siat_count + 
             stats.only_inventory_count + 
@@ -422,13 +463,21 @@ class SalesValidator:
             stats.other_mismatch_count
         )
         
+        # Critical: amount difference > 0.5%
+        amount_critical = stats.amount_difference_pct > 0.5
+        
         print(f"\n🎯 Overall Status:")
-        if total_issues == 0:
+        if amount_critical:
+            print(f"   ❌ CRITICAL - Amount difference exceeds threshold (>{0.5:.2f}%)")
+            print(f"      Difference: Bs. {stats.amount_difference:,.2f} ({stats.amount_difference_pct:.4f}%)")
+        elif stats.amount_mismatch_count > 0:
+            print(f"   ⚠️  AMOUNT MISMATCHES - {stats.amount_mismatch_count} invoices with different amounts")
+        elif total_issues == 0:
             print("   ✅ PERFECT - No discrepancies found!")
         elif total_issues <= 5:
-            print(f"   ⚠️  MINOR ISSUES - {total_issues} discrepancies detected")
+            print(f"   ✅ ACCEPTABLE - {total_issues} minor discrepancies (amounts match)")
         else:
-            print(f"   ❌ ATTENTION REQUIRED - {total_issues} discrepancies detected")
+            print(f"   ⚠️  MINOR ISSUES - {total_issues} discrepancies detected (amounts match)")
         
         print("=" * 80)
     
@@ -464,6 +513,12 @@ class SalesValidator:
                     "Total Inventory",
                     "Perfect Matches",
                     "Match Rate (%)",
+                    "",
+                    "SIAT Total Amount (Bs.)",
+                    "Inventory Total Amount (Bs.)",
+                    "Amount Difference (Bs.)",
+                    "Amount Difference (%)",
+                    "",
                     "Only in SIAT",
                     "Only in Inventory",
                     "Amount Mismatches",
@@ -476,6 +531,12 @@ class SalesValidator:
                     stats.total_inventory,
                     stats.matched_count,
                     f"{stats.match_rate:.2f}",
+                    "",
+                    f"{stats.total_siat_amount:,.2f}",
+                    f"{stats.total_inventory_amount:,.2f}",
+                    f"{stats.amount_difference:,.2f}",
+                    f"{stats.amount_difference_pct:.4f}",
+                    "",
                     stats.only_siat_count,
                     stats.only_inventory_count,
                     stats.amount_mismatch_count,

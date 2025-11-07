@@ -194,14 +194,35 @@ uv run python -m src.main --skip-scraping --sync-sas --dry-run
 # Real sync - actually write to SAS database (atomic transaction)
 uv run python -m src.main --skip-scraping --sync-sas
 
+# Force sync despite minor discrepancies (e.g., canceled/duplicate invoices)
+# Use this when you've verified discrepancies are acceptable
+uv run python -m src.main --skip-scraping --sync-sas --force-sync --dry-run
+uv run python -m src.main --skip-scraping --sync-sas --force-sync
+
 # Full workflow: scrape + validate + sync
 uv run python -m src.main --month SEPTIEMBRE --sync-sas
 ```
 
 **Requirements for --sync-sas:**
 - SAS_DB_* variables configured in `.env`
-- Validation passed (no critical discrepancies)
+- **Amount validation passed** (total amounts match within 0.5% tolerance)
+- **No individual amount mismatches** between matched invoices
 - Network access to SAS MySQL database
+
+**Validation Logic (Smart Sync):**
+- ✅ **Canceled/duplicate invoices in SIAT are OK** - They will be included in sync
+- ✅ **Critical check: Total amounts** must match within 0.5% (SIAT vs Inventory)
+- ✅ **No amount mismatches** in individual matched invoices
+- ℹ️ Invoices "only in SIAT" (e.g., canceled/duplicates) are automatically synced to SAS
+
+**--force-sync Flag:**
+- Use when amount validation fails but you've verified discrepancies are acceptable
+- ⚠️ **Always use with --dry-run first** to verify what would be synced
+- Bypasses the 0.5% amount tolerance check
+- Recommended workflow:
+  1. `--force-sync --dry-run` (review what would sync)
+  2. Verify amount discrepancies are acceptable
+  3. `--force-sync` (real sync)
 
 **See detailed documentation**: [docs/PHASE7_COMPLETE.md](docs/PHASE7_COMPLETE.md)
 
