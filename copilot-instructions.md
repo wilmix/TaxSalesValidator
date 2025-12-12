@@ -19,7 +19,7 @@ Crear un script de Python minimalista, robusto y asíncrono (usando asyncio y pl
 - **Fase 1**: Descarga y procesamiento de datos SIAT (web scraping + CUF extraction)
 - **Fase 2**: Consulta de base de datos de inventario local (MySQL)
 - **Fase 3**: Comparación y validación (SIAT vs Inventario)
-- **Fase 7**: Sincronización a sistema contable SAS (opcional, atomic transactions)
+- **Fase 4**: Sincronización a sistema contable SAS (opcional, atomic transactions)
 
 ## 💡 Principios Fundamentales (KISS, DRY, SOLID)
 
@@ -39,12 +39,12 @@ El script debe estar dividido en bloques lógicos principales, estrictamente sep
 
 **Core Modules (Phases 1-3):**
 1. **config.py**: Almacena selectores, credenciales y configuración general.
-2. **scraper.py / WebScraper**: Contiene solo la lógica de interacción web (Playwright).
+2. **web_scraper.py / WebScraper**: Contiene solo la lógica de interacción web (Playwright).
 3. **file_manager.py / FileManager**: Contiene solo la lógica de manejo de archivos CSV (guardar, limpiar, verificar).
 4. **data_processor.py / DataProcessor**: Contiene solo la lógica de lectura y preparación del DataFrame de Pandas.
-5. **validator.py / SalesValidator**: Contiene solo la lógica de comparación de filas entre el CSV y los datos de inventario local.
+5. **sales_validator.py / SalesValidator**: Contiene solo la lógica de comparación de filas entre el CSV y los datos de inventario local.
 
-**SAS Integration Modules (Phase 7):**
+**SAS Integration Modules (Phase 4):**
 6. **sas_connector.py / SasConnector**: Conexión y operaciones de base de datos MySQL (SAS) con transacciones atómicas.
 7. **sas_mapper.py / SasMapper**: Transformación de datos SIAT a formato sales_registers (35 campos).
 8. **sas_syncer.py / SasSyncer**: Orquestación del sync (prerequisites check, transform, upsert, stats).

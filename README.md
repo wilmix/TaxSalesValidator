@@ -97,12 +97,12 @@ TaxSalesValidator is a Python-based automation tool that:
 - ✅ **Excel report generation** ✅ COMPLETED
 - ✅ **Simplified output** (3 phases instead of 6) ✅ COMPLETED
 
-### Phase 3 (Planned)
-- ⏳ Advanced analytics dashboard
-- ⏳ Historical data comparison
-- ⏳ Export to multiple formats (Excel, JSON, SQL)
+### Phase 3 (Completed)
+- ✅ Advanced analytics dashboard
+- ✅ Historical data comparison
+- ✅ Export to multiple formats (Excel, JSON, SQL)
 
-### Phase 7 (Completed) - SAS Accounting System Integration
+### Phase 4 (Optional) - SAS Accounting System Integration
 - ✅ **Atomic transaction sync** - ALL-OR-NOTHING guarantee (no partial data) ✅ COMPLETED
 - ✅ **Data transformation** - 35-field mapping from SIAT to sales_registers ✅ COMPLETED
 - ✅ **Dry run mode** - Test sync without database changes ✅ COMPLETED
@@ -166,24 +166,30 @@ DB_PASSWORD=your_db_password
 ### Basic Execution
 
 ```bash
-# Run the scraper (downloads September report by default)
-uv run python src/main.py
+# Run the scraper (downloads previous month for current year by default)
+uv run python -m src.main
+
+# Alternative: Use the installed script (after uv sync)
+uv run tax-scraper
 ```
 
 ### Advanced Options
 
 ```bash
 # Download a specific month
-uv run python src/main.py --month OCTUBRE
+uv run python -m src.main --month OCTUBRE
+
+# Download a specific year and month
+uv run python -m src.main --year 2024 --month OCTUBRE
 
 # Enable verbose logging
-uv run python src/main.py --debug
+uv run python -m src.main --debug
 
 # Specify custom download directory
-uv run python src/main.py --output-dir ./custom_data
+uv run python -m src.main --output-dir ./custom_data
 ```
 
-### SAS Accounting System Integration (Phase 7)
+### SAS Accounting System Integration (Phase 4)
 
 **Sync validated SIAT data to SAS accounting database:**
 
@@ -451,10 +457,18 @@ TaxSalesValidator/
 ├── .gitignore                # Git ignore rules
 ├── README.md                 # This file
 ├── PLAN.md                   # Detailed development plan
+├── SETUP.md                  # Setup instructions
+├── CHANGELOG.md              # Version history
 ├── pyproject.toml            # UV dependencies
 ├── uv.lock                   # Dependency lock file
 ├── analyze_cuf.py            # Quick CUF analysis script
-├── test_db_connection.py     # Database connection test script (NEW)
+├── check_observations.py     # Observation checking utility
+├── diagnose_missing_rows.py  # Diagnostic script for missing rows
+├── test_db_connection.py     # Database connection test script
+├── test_sas_connection.py    # SAS database connection test
+├── test_sas_mapper.py        # SAS mapper test script
+├── verify_november_observations.py # November observations verification
+├── verify_observations.py    # General observations verification
 │
 ├── src/
 │   ├── __init__.py
@@ -463,22 +477,48 @@ TaxSalesValidator/
 │   ├── file_manager.py       # ZIP/CSV file handling
 │   ├── data_processor.py     # Pandas data processing
 │   ├── sales_processor.py    # CUF extraction
-│   ├── inventory_connector.py # MySQL database connector (NEW)
-│   └── main.py               # Application entry point
+│   ├── inventory_connector.py # MySQL database connector
+│   ├── sales_validator.py    # Invoice comparison and validation
+│   ├── sas_connector.py      # SAS database connector
+│   ├── sas_mapper.py         # SAS data transformation
+│   ├── sas_syncer.py         # SAS sync orchestration
+│   ├── main.py               # Application entry point
+│   └── main_backup.py        # Backup of main.py
 │
 ├── data/
 │   ├── downloads/            # Downloaded ZIP files
 │   └── processed/            # Extracted CSV files & processed data
 │
 ├── docs/                     # Documentation
+│   ├── ATOMIC_TRANSACTIONS_EXPLAINED.md
+│   ├── COMMIT_SUMMARY.md
+│   ├── CUF_IMPLEMENTATION_SUMMARY.md
 │   ├── CUF_PROCESSING.md     # CUF extraction guide
-│   ├── INVENTORY_INTEGRATION.md  # Database integration guide (NEW)
-│   └── INVENTORY_SETUP_COMPLETE.md  # Setup summary (NEW)
+│   ├── DELIVERY.md
+│   ├── INVENTORY_INTEGRATION.md  # Database integration guide
+│   ├── INVENTORY_SETUP_COMPLETE.md  # Setup summary
+│   ├── INSTALL_SUCCESS.md
+│   ├── OUTPUT_SIMPLIFICATION.md
+│   ├── PHASE5_COMPLETE.md
+│   ├── PHASE5_RESUMEN_ESPAÑOL.md
+│   ├── PHASE6_COMPLETE.md
+│   ├── PHASE7_ACCOUNTING_SYNC_PLAN.md
+│   ├── PHASE7_COMPLETE.md
+│   ├── PHASE7_IMPLEMENTATION_SUMMARY.md
+│   ├── PHASE7_RESUMEN_ESPANOL.md
+│   ├── PLAN.md
+│   ├── QUICKSTART_CUF.md
+│   ├── RESUMEN_CAMBIOS_ES.md
+│   └── SETUP.md
 │
 ├── logs/                     # Execution logs & error screenshots
 │
-└── tests/                    # Unit and integration tests
-    └── __init__.py
+├── tests/                    # Unit and integration tests
+│   └── __init__.py
+│
+├── build/                    # PyInstaller build output
+├── context/                  # Codegen context files
+└── dist/                     # Distribution files
 ```
 
 ---
