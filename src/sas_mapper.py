@@ -95,11 +95,12 @@ class SasMapper:
         if self.debug:
             print(f"[SasMapper] {message}")
     
-    def transform_dataframe(self, df_siat: pd.DataFrame) -> pd.DataFrame:
+    def transform_dataframe(self, df_siat: pd.DataFrame, only_in_siat: pd.DataFrame = None) -> pd.DataFrame:
         """Transform entire SIAT DataFrame to sales_registers format.
         
         Args:
             df_siat: SIAT DataFrame with CUF fields already extracted
+            only_in_siat: DataFrame with invoices only in SIAT (for observations)
         
         Returns:
             DataFrame in sales_registers format ready for sync
@@ -114,6 +115,13 @@ class SasMapper:
         # Validate required columns exist
         self._validate_siat_columns(df_siat)
         
+        # Create set of CUFs that are only in SIAT for quick lookup
+        only_in_siat_cufs = set()
+        if only_in_siat is not None and len(only_in_siat) > 0:
+            if "CODIGO DE AUTORIZACIÓN" in only_in_siat.columns:
+                only_in_siat_cufs = set(only_in_siat["CODIGO DE AUTORIZACIÓN"].astype(str))
+                self._log(f"Found {len(only_in_siat_cufs)} invoices only in SIAT")
+        
         # Create new DataFrame for transformed data
         transformed_rows = []
         
@@ -121,7 +129,7 @@ class SasMapper:
         
         for index, row in df_siat.iterrows():
             try:
-                transformed_row = self._transform_row(row, index)
+                transformed_row = self._transform_row(row, index, only_in_siat_cufs)
                 transformed_rows.append(transformed_row)
                 self.transformation_stats["successful"] += 1
                 
@@ -172,16 +180,20 @@ class SasMapper:
         
         self._log(f"✅ All required columns present ({len(required_columns)} validated)")
     
-    def _transform_row(self, row: pd.Series, index: int) -> Dict:
+    def _transform_row(self, row: pd.Series, index: int, only_in_siat_cufs: set = None) -> Dict:
         """Transform a single row from SIAT to sales_registers format.
         
         Args:
             row: Row from SIAT DataFrame
             index: Row index for logging
+            only_in_siat_cufs: Set of CUFs that are only in SIAT
         
         Returns:
             Dictionary with sales_registers fields
         """
+        if only_in_siat_cufs is None:
+            only_in_siat_cufs = set()
+            
         transformed = {}
         
         # 1. Map direct fields
@@ -235,7 +247,13 @@ class SasMapper:
         # 3. Add metadata fields
         transformed["author"] = "TaxSalesValidator"
         transformed["obs"] = None
-        transformed["observations"] = None
+        
+        # 4. Add observations based on whether this invoice is only in SIAT
+        auth_code = str(row.get("CODIGO DE AUTORIZACIÓN", "")) if "CODIGO DE AUTORIZACIÓN" in row.index else ""
+        if auth_code in only_in_siat_cufs:
+            transformed["observations"] = "No existe en inventarios"
+        else:
+            transformed["observations"] = None
         
         return transformed
     

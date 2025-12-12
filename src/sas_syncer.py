@@ -90,6 +90,7 @@ class SasSyncer:
     def sync_validated_data(
         self,
         df_siat: pd.DataFrame,
+        only_in_siat: pd.DataFrame = None,
         dry_run: bool = False
     ) -> Dict:
         """Synchronize validated SIAT data to SAS accounting system.
@@ -102,6 +103,7 @@ class SasSyncer:
         
         Args:
             df_siat: SIAT DataFrame (processed_siat_*.csv format)
+            only_in_siat: DataFrame with invoices only in SIAT (for observations)
             dry_run: If True, only validate/transform but don't write to database
         
         Returns:
@@ -141,7 +143,7 @@ class SasSyncer:
             # Step 1: Transform data
             logger.info(f"{'[DRY RUN] ' if dry_run else ''}Transforming {len(df_siat):,} SIAT rows...")
             
-            df_transformed = self.mapper.transform_dataframe(df_siat)
+            df_transformed = self.mapper.transform_dataframe(df_siat, only_in_siat=only_in_siat)
             
             transformation_stats = self.mapper.get_transformation_stats()
             result['transformation_stats'] = transformation_stats

@@ -125,12 +125,21 @@ class WebScraper:
 
         # Click on billing system heading to open menu
         await self._page.get_by_role(**Config.SELECTOR_BILLING_SYSTEM).click()
+        
+        # Wait for the menu to appear
+        await asyncio.sleep(2)
 
-        # Wait for menu panel and click on "Registro de Compras y Ventas"
-        menu_item = self._page.locator(Config.SELECTOR_PURCHASES_SALES_MENU).filter(
-            has_text=Config.SELECTOR_PURCHASES_SALES_TEXT
-        )
-        await menu_item.click()
+        # Find and click on "Registro de Compras y Ventas"
+        # Using text selector as the menu panel ID may vary
+        menu_item = self._page.locator(f"text={Config.SELECTOR_PURCHASES_SALES_TEXT}")
+        count = await menu_item.count()
+        
+        if count > 0:
+            await menu_item.first.click()
+        else:
+            raise TimeoutError(
+                f"Could not find menu item: {Config.SELECTOR_PURCHASES_SALES_TEXT}"
+            )
 
         # Click on "CONSULTAS" link
         await self._page.get_by_role(**Config.SELECTOR_CONSULTAS_LINK).click()

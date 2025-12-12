@@ -291,7 +291,11 @@ async def main(
                     mode = "🔍 DRY RUN" if dry_run else "💾 REAL SYNC"
                     print(f"{mode}: Syncing validated SIAT data to SAS...")
                     
-                    sync_result = syncer.sync_validated_data(df_siat, dry_run=dry_run)
+                    sync_result = syncer.sync_validated_data(
+                        df_siat, 
+                        only_in_siat=comparison.only_in_siat,
+                        dry_run=dry_run
+                    )
                     
                     # Show summary
                     print("\n" + syncer.get_sync_summary(sync_result))

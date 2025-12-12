@@ -380,23 +380,24 @@ class SalesValidator:
         total_matched = len(comparison.matched_invoices)
         match_rate = (total_matched / len(df_siat_filtered) * 100) if len(df_siat_filtered) > 0 else 0.0
         
-        # Calculate total amounts for validation
+        # Calculate total amounts for validation (ONLY valid/matched invoices)
+        # This excludes anuladas (only in SIAT) and counts only matching invoices
         total_siat_amount = 0.0
         total_inventory_amount = 0.0
         
-        # Sum amounts from SIAT (MODALIDAD=2 only)
-        if "IMPORTE TOTAL DE LA VENTA" in df_siat_filtered.columns:
+        # Sum amounts from MATCHED invoices in SIAT
+        if len(comparison.matched_invoices) > 0 and "IMPORTE TOTAL DE LA VENTA" in comparison.matched_invoices.columns:
             try:
-                total_siat_amount = df_siat_filtered["IMPORTE TOTAL DE LA VENTA"].astype(float).sum()
+                total_siat_amount = comparison.matched_invoices["IMPORTE TOTAL DE LA VENTA"].astype(float).sum()
             except (ValueError, TypeError):
-                self._log("Warning: Could not calculate SIAT total amount")
+                self._log("Warning: Could not calculate SIAT total amount for matched invoices")
         
-        # Sum amounts from inventory
-        if "total" in df_inventory.columns:
+        # Sum amounts from MATCHED invoices in inventory
+        if len(comparison.matched_invoices) > 0 and "total" in comparison.matched_invoices.columns:
             try:
-                total_inventory_amount = df_inventory["total"].astype(float).sum()
+                total_inventory_amount = comparison.matched_invoices["total"].astype(float).sum()
             except (ValueError, TypeError):
-                self._log("Warning: Could not calculate inventory total amount")
+                self._log("Warning: Could not calculate inventory total amount for matched invoices")
         
         # Calculate difference
         amount_difference = abs(total_siat_amount - total_inventory_amount)

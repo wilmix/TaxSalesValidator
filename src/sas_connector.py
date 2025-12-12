@@ -328,7 +328,7 @@ class SasConnector:
             "debit_tax_base_amount", "debit_tax", "status", "control_code",
             "sale_type", "right_to_tax_credit", "consolidation_status",
             "branch_office", "modality", "emission_type", "invoice_type",
-            "sector", "author"
+            "sector", "author", "observations"
         ]
         
         # Build placeholders for VALUES
