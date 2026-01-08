@@ -48,6 +48,9 @@ class ComparisonStats:
         total_inventory_amount: Total amount in inventory (Bs.)
         amount_difference: Absolute difference in amounts (Bs.)
         amount_difference_pct: Percentage difference in amounts
+        only_siat_valid_count: Number of valid (not canceled) invoices only in SIAT
+        only_siat_canceled_count: Number of canceled invoices only in SIAT
+        only_siat_valid_amount: Sum of amounts for valid invoices only in SIAT (Bs.)
     """
     total_siat: int
     total_inventory: int
@@ -62,6 +65,9 @@ class ComparisonStats:
     total_inventory_amount: float
     amount_difference: float
     amount_difference_pct: float
+    only_siat_valid_count: int
+    only_siat_canceled_count: int
+    only_siat_valid_amount: float
 
 
 class SalesValidator:
@@ -100,6 +106,34 @@ class SalesValidator:
         """
         self.debug = debug
         self._log("SalesValidator initialized")
+    
+    def _is_invoice_canceled(self, row: pd.Series) -> bool:
+        """Check if an invoice is canceled based on ESTADO field.
+        
+        Checks for canceled status indicators in SIAT data. An invoice is
+        considered canceled if ESTADO contains one of the following values
+        (case-insensitive):
+        - 'Anulado', 'ANULADO', 'Anulada', 'ANULADA' (masculine and feminine forms)
+        - 'A' (abbreviated form)
+        - 'Cancelado', 'CANCELADO', 'Cancelada', 'CANCELADA'
+        - 'Canceled'
+        - '1' (numeric canceled code)
+        
+        Args:
+            row: A pandas Series representing a single invoice row
+        
+        Returns:
+            True if invoice is canceled, False otherwise (including valid status)
+        """
+        if "ESTADO" not in row.index:
+            return False
+        
+        estado = str(row.get("ESTADO", "")).strip().upper()
+        
+        # List of canceled status indicators (includes both masculine and feminine Spanish forms)
+        canceled_statuses = ['ANULADO', 'ANULADA', 'A', 'CANCELADO', 'CANCELADA', 'CANCELED', '1']
+        
+        return estado in canceled_statuses
     
     def _log(self, message: str) -> None:
         """Log message if debug mode is enabled.
@@ -376,19 +410,36 @@ class SalesValidator:
         comparison.only_in_siat = only_siat
         comparison.only_in_inventory = only_inventory
         
+        # Step 3b: Analyze only_siat invoices - separate valid vs canceled
+        only_siat_valid_count = 0
+        only_siat_canceled_count = 0
+        only_siat_valid_amount = 0.0
+        
+        if len(only_siat) > 0:
+            for idx, row in only_siat.iterrows():
+                if self._is_invoice_canceled(row):
+                    only_siat_canceled_count += 1
+                else:
+                    only_siat_valid_count += 1
+                    # Sum the amount of valid only-in-SIAT invoices
+                    try:
+                        amount = float(row.get("IMPORTE TOTAL DE LA VENTA", 0.0))
+                        only_siat_valid_amount += amount
+                    except (ValueError, TypeError):
+                        self._log(f"Warning: Could not parse amount for valid only-in-SIAT invoice")
+        
         # Step 4: Calculate statistics
         total_matched = len(comparison.matched_invoices)
         match_rate = (total_matched / len(df_siat_filtered) * 100) if len(df_siat_filtered) > 0 else 0.0
         
-        # Calculate total amounts for validation (ONLY valid/matched invoices)
-        # This excludes anuladas (only in SIAT) and counts only matching invoices
-        total_siat_amount = 0.0
+        # Calculate total amounts from MATCHED invoices only (excludes only-in-SIAT)
+        matched_siat_amount = 0.0
         total_inventory_amount = 0.0
         
         # Sum amounts from MATCHED invoices in SIAT
         if len(comparison.matched_invoices) > 0 and "IMPORTE TOTAL DE LA VENTA" in comparison.matched_invoices.columns:
             try:
-                total_siat_amount = comparison.matched_invoices["IMPORTE TOTAL DE LA VENTA"].astype(float).sum()
+                matched_siat_amount = comparison.matched_invoices["IMPORTE TOTAL DE LA VENTA"].astype(float).sum()
             except (ValueError, TypeError):
                 self._log("Warning: Could not calculate SIAT total amount for matched invoices")
         
@@ -399,7 +450,11 @@ class SalesValidator:
             except (ValueError, TypeError):
                 self._log("Warning: Could not calculate inventory total amount for matched invoices")
         
-        # Calculate difference
+        # Calculate TRUE total SIAT amount including valid only-in-SIAT invoices
+        # This is the correct business logic: SIAT total = matched + valid unmatched
+        total_siat_amount = matched_siat_amount + only_siat_valid_amount
+        
+        # Calculate difference using TRUE totals
         amount_difference = abs(total_siat_amount - total_inventory_amount)
         amount_difference_pct = 0.0
         if total_inventory_amount > 0:
@@ -418,7 +473,10 @@ class SalesValidator:
             total_siat_amount=total_siat_amount,
             total_inventory_amount=total_inventory_amount,
             amount_difference=amount_difference,
-            amount_difference_pct=amount_difference_pct
+            amount_difference_pct=amount_difference_pct,
+            only_siat_valid_count=only_siat_valid_count,
+            only_siat_canceled_count=only_siat_canceled_count,
+            only_siat_valid_amount=only_siat_valid_amount
         )
         
         # Display summary
@@ -442,6 +500,8 @@ class SalesValidator:
         
         print(f"\n💰 Total Amounts:")
         print(f"   - SIAT Total: Bs. {stats.total_siat_amount:,.2f}")
+        if stats.only_siat_valid_amount > 0:
+            print(f"   - Only in SIAT (valid, not in Inventory): Bs. {stats.only_siat_valid_amount:,.2f}")
         print(f"   - Inventory Total: Bs. {stats.total_inventory_amount:,.2f}")
         print(f"   - Difference: Bs. {stats.amount_difference:,.2f} ({stats.amount_difference_pct:.4f}%)")
         
@@ -450,35 +510,49 @@ class SalesValidator:
         
         print(f"\n⚠️  Discrepancies:")
         print(f"   - Only in SIAT: {stats.only_siat_count}")
+        if stats.only_siat_count > 0:
+            print(f"     • Valid (not canceled): {stats.only_siat_valid_count}")
+            print(f"     • Canceled: {stats.only_siat_canceled_count}")
         print(f"   - Only in Inventory: {stats.only_inventory_count}")
         print(f"   - Amount mismatches: {stats.amount_mismatch_count}")
         print(f"   - Customer mismatches: {stats.customer_mismatch_count}")
         print(f"   - Other field mismatches: {stats.other_mismatch_count}")
         
-        # Determine status based on amounts (critical) and counts (minor)
-        total_issues = (
-            stats.only_siat_count + 
+        # Determine status based on critical factors
+        # Critical issues:
+        # 1. Valid (not canceled) invoices only in SIAT
+        # 2. Amount difference > 0.5%
+        has_valid_only_siat = stats.only_siat_valid_count > 0
+        amount_critical = stats.amount_difference_pct > 0.5
+        has_amount_mismatches = stats.amount_mismatch_count > 0
+        
+        # Non-critical issues
+        only_siat_all_canceled = (stats.only_siat_count > 0 and 
+                                  stats.only_siat_valid_count == 0 and 
+                                  stats.only_siat_canceled_count > 0)
+        total_other_issues = (
             stats.only_inventory_count + 
-            stats.amount_mismatch_count + 
             stats.customer_mismatch_count + 
             stats.other_mismatch_count
         )
         
-        # Critical: amount difference > 0.5%
-        amount_critical = stats.amount_difference_pct > 0.5
-        
         print(f"\n🎯 Overall Status:")
-        if amount_critical:
+        if has_valid_only_siat:
+            print(f"   ❌ CRITICAL - Valid invoices found ONLY in SIAT (not in inventory)")
+            print(f"      These {stats.only_siat_valid_count} invoice(s) must exist in Inventory or be marked as Canceled")
+        elif amount_critical:
             print(f"   ❌ CRITICAL - Amount difference exceeds threshold (>{0.5:.2f}%)")
             print(f"      Difference: Bs. {stats.amount_difference:,.2f} ({stats.amount_difference_pct:.4f}%)")
-        elif stats.amount_mismatch_count > 0:
-            print(f"   ⚠️  AMOUNT MISMATCHES - {stats.amount_mismatch_count} invoices with different amounts")
-        elif total_issues == 0:
+        elif has_amount_mismatches:
+            print(f"   ❌ CRITICAL - Amount mismatches found: {stats.amount_mismatch_count} invoices with different amounts")
+        elif only_siat_all_canceled and stats.amount_difference_pct <= 0.5:
+            print(f"   ✅ ACCEPTABLE - Only in SIAT: all {stats.only_siat_canceled_count} are canceled (amounts match)")
+        elif total_other_issues == 0:
             print("   ✅ PERFECT - No discrepancies found!")
-        elif total_issues <= 5:
-            print(f"   ✅ ACCEPTABLE - {total_issues} minor discrepancies (amounts match)")
+        elif total_other_issues <= 5:
+            print(f"   ✅ ACCEPTABLE - {total_other_issues} minor discrepancies (amounts match)")
         else:
-            print(f"   ⚠️  MINOR ISSUES - {total_issues} discrepancies detected (amounts match)")
+            print(f"   ⚠️  MINOR ISSUES - {total_other_issues} discrepancies detected (amounts match)")
         
         print("=" * 80)
     
