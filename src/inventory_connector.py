@@ -200,7 +200,7 @@ class InventoryConnector:
           f.fechaFac BETWEEN @ini AND @end
           AND (
             f.lote = 0
-            OR f.lote = '138'
+            OR f.lote >= 138
           )
         GROUP BY
           fe.idFactura
@@ -291,7 +291,7 @@ class InventoryConnector:
                   f.fechaFac BETWEEN @ini AND @end
                   AND (
                     f.lote = 0
-                    OR f.lote = '138'
+                    OR f.lote >= 138
                   )
                 GROUP BY
                   fe.idFactura
