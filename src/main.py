@@ -19,6 +19,17 @@ from .sales_validator import SalesValidator
 from .sas_syncer import SasSyncer
 from .web_scraper import WebScraper
 
+# Configure UTF-8 encoding for Windows console
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Python < 3.7
+        import codecs
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+        sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+
 
 def find_latest_csv() -> Optional[Path]:
     """Find the most recently created CSV file from SIAT scraping in processed directory.

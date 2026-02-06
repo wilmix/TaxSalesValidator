@@ -299,7 +299,34 @@ PHASE 3: COMPARISON AND VALIDATION
 ================================================================================
 ```
 
-**Note**: Use `--debug` flag to see detailed step-by-step output with browser automation details, CUF extraction validation, and full file paths.
+**Note**:
+- Use `--debug` flag to see detailed step-by-step output with browser automation details, CUF extraction validation, and full file paths
+- ANULADA (canceled) invoices are automatically excluded from amount totals and comparisons for accurate reconciliation
+
+### Invoice Status Handling
+
+The system automatically filters invoices based on their status in SIAT:
+
+```
+ESTADO Field Values:
+├── VALIDA   → Included in totals and comparisons ✅
+└── ANULADA  → Excluded from totals and branch breakdowns
+                (but counted separately for transparency)
+```
+
+**Fair Comparison Logic:**
+- **SIAT Total Amount** = VALIDA invoices only
+- **Inventory Total Amount** = Only invoices that are VALIDA in SIAT (ANULADA excluded from both sides)
+- **Branch Breakdown**: Shows VALIDA count + separate ANULADA count, but amounts exclude ANULADA
+
+**Example:**
+```
+SANTA CRUZ (Sucursal 5):
+- SIAT:       173 VALID invoices | Bs. 473,896.15
+              6 ANULADAS (excluded from totals)
+- Inventory:  173 invoices | Bs. 473,896.15
+- Difference: 0 invoices | Bs. 0.00 (accurate comparison)
+```
 
 ---
 
