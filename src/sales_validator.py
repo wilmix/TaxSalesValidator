@@ -597,39 +597,35 @@ class SalesValidator:
         total_matched = len(comparison.matched_invoices)
         match_rate = (total_matched / len(df_siat_filtered) * 100) if len(df_siat_filtered) > 0 else 0.0
 
-        # Calculate total amounts from MATCHED invoices - ONLY VALID (exclude ANULADAS)
-        matched_siat_amount = 0.0
+        # Calculate total amounts directly from the full filtered datasets (VALID only).
+        # Using df_siat_filtered (not just perfect matches) avoids under-counting invoices
+        # that have amount/customer mismatches but are still real invoices.
+        total_siat_amount = 0.0
         total_inventory_amount = 0.0
 
-        # Sum amounts from MATCHED invoices in SIAT - ONLY VALID
-        if len(comparison.matched_invoices) > 0 and "IMPORTE TOTAL DE LA VENTA" in comparison.matched_invoices.columns:
+        # SIAT total: all VALID invoices in the filtered SIAT dataset
+        if "IMPORTE TOTAL DE LA VENTA" in df_siat_filtered.columns:
             try:
-                # Filter only VALID invoices (exclude ANULADAS)
-                valid_matched = comparison.matched_invoices[
-                    ~comparison.matched_invoices.apply(self._is_invoice_canceled, axis=1)
+                valid_siat = df_siat_filtered[
+                    ~df_siat_filtered.apply(self._is_invoice_canceled, axis=1)
                 ]
-                matched_siat_amount = valid_matched["IMPORTE TOTAL DE LA VENTA"].astype(float).sum()
-                self._log(f"  - Matched SIAT amount (VALID only): Bs. {matched_siat_amount:,.2f}")
-                self._log(f"  - Excluded {len(comparison.matched_invoices) - len(valid_matched)} ANULADAS from matched")
+                total_siat_amount = valid_siat["IMPORTE TOTAL DE LA VENTA"].astype(float).sum()
+                self._log(f"  - SIAT total (VALID only): Bs. {total_siat_amount:,.2f}")
+                self._log(f"  - Excluded {len(df_siat_filtered) - len(valid_siat)} ANULADAS from SIAT total")
             except (ValueError, TypeError):
-                self._log("Warning: Could not calculate SIAT total amount for matched invoices")
+                self._log("Warning: Could not calculate SIAT total amount")
 
-        # Sum amounts from MATCHED invoices in inventory - ONLY those that are VALID in SIAT
-        # This ensures fair comparison: we exclude invoices that are ANULADAS in SIAT from both sides
-        if len(comparison.matched_invoices) > 0 and "total" in comparison.matched_invoices.columns:
+        # Inventory total: all invoices that are VALID in SIAT (fair comparison)
+        # df_inventory_filtered is built below in Step 5; compute it first for totals
+        df_inventory_filtered_for_total = self._filter_inventory_by_siat_estado(
+            df_inventory, df_siat_filtered
+        )
+        if "total" in df_inventory_filtered_for_total.columns:
             try:
-                # Use the same filter as SIAT - only invoices that are VALIDA in SIAT
-                valid_matched = comparison.matched_invoices[
-                    ~comparison.matched_invoices.apply(self._is_invoice_canceled, axis=1)
-                ]
-                total_inventory_amount = valid_matched["total"].astype(float).sum()
-                self._log(f"  - Matched Inventory amount (VALID in SIAT only): Bs. {total_inventory_amount:,.2f}")
+                total_inventory_amount = df_inventory_filtered_for_total["total"].astype(float).sum()
+                self._log(f"  - Inventory total (excluding SIAT-ANULADAs): Bs. {total_inventory_amount:,.2f}")
             except (ValueError, TypeError):
-                self._log("Warning: Could not calculate inventory total amount for matched invoices")
-
-        # Calculate TRUE total SIAT amount including valid only-in-SIAT invoices
-        # This is the correct business logic: SIAT total (VALID) = matched VALID + valid unmatched
-        total_siat_amount = matched_siat_amount + only_siat_valid_amount
+                self._log("Warning: Could not calculate inventory total amount")
 
         # Calculate difference using TRUE totals (VALID only)
         amount_difference = abs(total_siat_amount - total_inventory_amount)
@@ -644,11 +640,8 @@ class SalesValidator:
             branch_col="SUCURSAL"
         )
 
-        # Filter inventory to exclude invoices that are ANULADAS in SIAT
-        # This ensures fair comparison: SIAT VALIDAS vs Inventory (excluding ANULADAS in SIAT)
-        df_inventory_filtered = self._filter_inventory_by_siat_estado(
-            df_inventory, df_siat_filtered
-        )
+        # Re-use the filtered inventory already computed for totals above
+        df_inventory_filtered = df_inventory_filtered_for_total
 
         branch_breakdown_inventory = self._calculate_branch_breakdown(
             df_inventory_filtered,
