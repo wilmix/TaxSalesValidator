@@ -303,8 +303,9 @@ async def main(
                     print(f"{mode}: Syncing validated SIAT data to SAS...")
                     
                     sync_result = syncer.sync_validated_data(
-                        df_siat, 
+                        df_siat,
                         only_in_siat=comparison.only_in_siat,
+                        df_inventory=df_inventory,
                         dry_run=dry_run
                     )
                     

@@ -91,19 +91,21 @@ class SasSyncer:
         self,
         df_siat: pd.DataFrame,
         only_in_siat: pd.DataFrame = None,
+        df_inventory: pd.DataFrame = None,
         dry_run: bool = False
     ) -> Dict:
         """Synchronize validated SIAT data to SAS accounting system.
-        
+
         This is the main sync method that:
         1. Transforms SIAT DataFrame to sales_registers format
         2. Validates transformed data
         3. Performs atomic UPSERT to database (or simulates if dry_run=True)
         4. Returns detailed statistics
-        
+
         Args:
             df_siat: SIAT DataFrame (processed_siat_*.csv format)
             only_in_siat: DataFrame with invoices only in SIAT (for observations)
+            df_inventory: Inventory DataFrame used to populate obs field from glosa
             dry_run: If True, only validate/transform but don't write to database
         
         Returns:
@@ -143,7 +145,11 @@ class SasSyncer:
             # Step 1: Transform data
             logger.info(f"{'[DRY RUN] ' if dry_run else ''}Transforming {len(df_siat):,} SIAT rows...")
             
-            df_transformed = self.mapper.transform_dataframe(df_siat, only_in_siat=only_in_siat)
+            df_transformed = self.mapper.transform_dataframe(
+                df_siat,
+                only_in_siat=only_in_siat,
+                df_inventory=df_inventory,
+            )
             
             transformation_stats = self.mapper.get_transformation_stats()
             result['transformation_stats'] = transformation_stats

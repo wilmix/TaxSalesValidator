@@ -95,47 +95,66 @@ class SasMapper:
         if self.debug:
             print(f"[SasMapper] {message}")
     
-    def transform_dataframe(self, df_siat: pd.DataFrame, only_in_siat: pd.DataFrame = None) -> pd.DataFrame:
+    def transform_dataframe(
+        self,
+        df_siat: pd.DataFrame,
+        only_in_siat: pd.DataFrame = None,
+        df_inventory: pd.DataFrame = None,
+    ) -> pd.DataFrame:
         """Transform entire SIAT DataFrame to sales_registers format.
-        
+
         Args:
             df_siat: SIAT DataFrame with CUF fields already extracted
             only_in_siat: DataFrame with invoices only in SIAT (for observations)
-        
+            df_inventory: Inventory DataFrame used to populate obs field from glosa
+
         Returns:
             DataFrame in sales_registers format ready for sync
-        
+
         Raises:
             ValueError: If required columns are missing
         """
         self._log("=" * 60)
         self._log("Starting DataFrame transformation")
         self._log(f"Input rows: {len(df_siat)}")
-        
+
         # Validate required columns exist
         self._validate_siat_columns(df_siat)
-        
+
+        # Build CUF -> glosa lookup from inventory for the obs field
+        inventory_glosa_map: Dict[str, str] = {}
+        if df_inventory is not None and len(df_inventory) > 0:
+            if "cuf" in df_inventory.columns and "glosa" in df_inventory.columns:
+                valid_rows = df_inventory.dropna(subset=["cuf"])
+                inventory_glosa_map = (
+                    valid_rows[valid_rows["glosa"].notna()]
+                    .set_index("cuf")["glosa"]
+                    .astype(str)
+                    .to_dict()
+                )
+                self._log(f"Built inventory glosa map: {len(inventory_glosa_map)} entries")
+
         # Create set of CUFs that are only in SIAT for quick lookup
         only_in_siat_cufs = set()
         if only_in_siat is not None and len(only_in_siat) > 0:
             if "CODIGO DE AUTORIZACIÓN" in only_in_siat.columns:
                 only_in_siat_cufs = set(only_in_siat["CODIGO DE AUTORIZACIÓN"].astype(str))
                 self._log(f"Found {len(only_in_siat_cufs)} invoices only in SIAT")
-        
+
         # Create new DataFrame for transformed data
         transformed_rows = []
-        
+
         self.transformation_stats["total_rows"] = len(df_siat)
-        
+
         for index, row in df_siat.iterrows():
             try:
-                transformed_row = self._transform_row(row, index, only_in_siat_cufs)
+                transformed_row = self._transform_row(row, index, only_in_siat_cufs, inventory_glosa_map)
                 transformed_rows.append(transformed_row)
                 self.transformation_stats["successful"] += 1
-                
+
                 if self.debug and (index + 1) % 100 == 0:
                     self._log(f"  ✓ Transformed {index + 1}/{len(df_siat)} rows")
-                    
+
             except Exception as e:
                 self.transformation_stats["errors"] += 1
                 self._log(f"  ⚠️  Error transforming row {index}: {e}")
@@ -180,19 +199,28 @@ class SasMapper:
         
         self._log(f"✅ All required columns present ({len(required_columns)} validated)")
     
-    def _transform_row(self, row: pd.Series, index: int, only_in_siat_cufs: set = None) -> Dict:
+    def _transform_row(
+        self,
+        row: pd.Series,
+        index: int,
+        only_in_siat_cufs: set = None,
+        inventory_glosa_map: Dict[str, str] = None,
+    ) -> Dict:
         """Transform a single row from SIAT to sales_registers format.
-        
+
         Args:
             row: Row from SIAT DataFrame
             index: Row index for logging
             only_in_siat_cufs: Set of CUFs that are only in SIAT
-        
+            inventory_glosa_map: Dict mapping CUF -> glosa from inventory
+
         Returns:
             Dictionary with sales_registers fields
         """
         if only_in_siat_cufs is None:
             only_in_siat_cufs = set()
+        if inventory_glosa_map is None:
+            inventory_glosa_map = {}
             
         transformed = {}
         
@@ -246,11 +274,18 @@ class SasMapper:
         
         # 3. Add metadata fields
         transformed["author"] = "TaxSalesValidator"
-        transformed["obs"] = None
-        
-        # 4. Add observations based on whether this invoice is only in SIAT
+
+        # obs: populated from inventory glosa when the invoice exists in inventory
         auth_code = str(row.get("CODIGO DE AUTORIZACIÓN", "")) if "CODIGO DE AUTORIZACIÓN" in row.index else ""
-        if auth_code in only_in_siat_cufs:
+        transformed["obs"] = inventory_glosa_map.get(auth_code) or None
+
+        # 4. observations: contextual note based on sector or SIAT-only status
+        sector = str(row.get("SECTOR", "")).strip() if "SECTOR" in row.index else ""
+        if sector == "02":
+            transformed["observations"] = "Factura de alquiler"
+        elif sector == "35":
+            transformed["observations"] = "Factura en dólares - SIAT desktop"
+        elif auth_code in only_in_siat_cufs:
             transformed["observations"] = "No existe en inventarios"
         else:
             transformed["observations"] = None
