@@ -101,6 +101,10 @@ class SalesValidator:
     
     # Tolerance for amount comparison (in bolivianos)
     AMOUNT_TOLERANCE = 0.01
+
+    # Alquiler/rental sector code to exclude from inventory comparison
+    # SECTOR values are 2-char strings extracted from CUF: "01"=merch, "02"=rental, "35"=dollar invoices
+    ALQUILER_SECTOR = "02"
     
     def __init__(self, debug: bool = False):
         """Initialize the validator.
@@ -302,6 +306,39 @@ class SalesValidator:
         self._log(f"  - Filtered rows: {filtered_count}")
         self._log(f"  - Excluded rows: {excluded_count} (MODALIDAD != {modality})")
         
+        return filtered_df
+
+    def filter_siat_exclude_alquiler(
+        self,
+        df_siat: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Exclude alquiler/rental invoices (SECTOR=2) from SIAT data.
+
+        SECTOR codes (integers extracted from CUF):
+        - 1  = General merchandise (compared with inventory)
+        - 2  = Rental / alquiler (never in inventory, excluded from comparison)
+
+        Args:
+            df_siat: SIAT DataFrame with SECTOR column
+
+        Returns:
+            Filtered DataFrame with alquiler invoices removed
+        """
+        if "SECTOR" not in df_siat.columns:
+            self._log("Warning: SECTOR column not found. Returning original DataFrame.")
+            return df_siat
+
+        original_count = len(df_siat)
+        filtered_df = df_siat[df_siat["SECTOR"] != self.ALQUILER_SECTOR].copy()
+        filtered_count = len(filtered_df)
+
+        excluded_count = original_count - filtered_count
+
+        self._log(f"Excluded alquiler/rental invoices (SECTOR={self.ALQUILER_SECTOR})")
+        self._log(f"  - Original rows: {original_count}")
+        self._log(f"  - Filtered rows: {filtered_count}")
+        self._log(f"  - Excluded rows: {excluded_count} (SECTOR={self.ALQUILER_SECTOR}, alquiler/rental)")
+
         return filtered_df
     
     def match_invoices_by_cuf(
@@ -520,9 +557,12 @@ class SalesValidator:
         Returns:
             Tuple of (ComparisonResult, ComparisonStats)
         """
-        # Step 1: Filter SIAT by modality
+        # Step 1: Filter SIAT by modality (MODALIDAD=2: computerized inventory invoices)
         df_siat_filtered = self.filter_siat_by_modality(df_siat, modality="2")
-        
+
+        # Step 1b: Exclude alquiler/rental invoices (SECTOR=2) — they're never in inventory
+        df_siat_filtered = self.filter_siat_exclude_alquiler(df_siat_filtered)
+
         # Step 2: Match by CUF
         matched_siat, only_siat, only_inventory = self.match_invoices_by_cuf(
             df_siat_filtered, df_inventory
